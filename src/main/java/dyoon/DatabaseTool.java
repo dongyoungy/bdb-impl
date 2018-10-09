@@ -37,6 +37,7 @@ public class DatabaseTool {
 
     String joinTable = this.findJoinTable(q);
     if (joinTable != null) {
+      System.out.println("Found join table: " + joinTable);
       q.setJoinTableName(joinTable);
       return;
     }
@@ -56,6 +57,7 @@ public class DatabaseTool {
 
     try {
       if (!checkTableExists(joinTableName)) {
+        System.out.println("Creating join table: " + joinTableName);
         String sql =
             String.format(
                 "CREATE TABLE %s STORED AS parquet AS SELECT * FROM %s WHERE %s",
