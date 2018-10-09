@@ -21,3 +21,52 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# mac
+.DS_Store
+
+# IntelliJ
+/.idea
+/verdict.iml
+*.iml
+
+# build
+/out
+/config.conf
+/build/sbt-launch-0.13.9.jar
+/error-test
+target/
+jars/
+*.class
+site/
+
+# eclipse
+.classpath
+.project
+.settings
+
+# log
+*.log
+
+# Test configuration files
+nocommit/
+*NoCommit*
+verdictdb-private-resources/
+
+# config
+conf/verdict.properties
+
+# libs
+libs/*.jar
+jdbc_jars/*.jar
+
+# misc
+license_update.py
+*.pyc
+core/src/test/java/edu/umich/verdict/temp/
+spark-warehouse/
+metastore_db/
+**/**/VerdictSQLLexer.tokens
+
+# Python
+.pytest_cache/
