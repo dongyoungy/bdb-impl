@@ -12,11 +12,8 @@ import java.util.*;
 public class Cache {
 
   public final static String TABLE_SIZE_SUFFIX = ".tablesize";
-  public final static String TABLE_SIZE_IN_BYTES_SUFFIX = ".tablesizebytes";
   public final static String GROUP_COUNT_SUFFIX = ".groupcount";
-  public final static String HISTOGRAM_SUFFIX = ".histogram";
-  public final static String AVERAGE_ROW_SIZE_SUFFIX = ".averagerowsize";
-  public final static String JOIN_RATIO_SUFFIX = ".joinratio";
+  public final static String AVG_GROUP_SIZE_SUFFIX = ".avggroupsize";
 
   private final static String CACHE_FILE_PATH = "." + File.separator + "cache";
 
@@ -125,5 +122,24 @@ public class Cache {
     this.updateCacheFile();
   }
 
+  public Long getGroupCount(Query q) {
+    String key = String.format("%s_%s", q.getQCSString(), GROUP_COUNT_SUFFIX);
+    return (Long) this.get(key);
+  }
+
+  public void setGroupCount(Query q, Long value) {
+    String key = String.format("%s_%s", q.getQCSString(), GROUP_COUNT_SUFFIX);
+    this.put(key, value);
+  }
+
+  public Double getAverageGroupSize(Query q) {
+    String key = String.format("%s_%s", q.getQCSString(), AVG_GROUP_SIZE_SUFFIX);
+    return (Double) this.get(key);
+  }
+
+  public void setAverageGroupSize(Query q, Double value) {
+    String key = String.format("%s_%s", q.getQCSString(), AVG_GROUP_SIZE_SUFFIX);
+    this.put(key, value);
+  }
 }
 
