@@ -113,7 +113,7 @@ public class DatabaseTool {
       return ImmutablePair.of(groupCount, avgGroupSize);
     }
     Joiner j = Joiner.on("_");
-    String joinTableName = j.join(q.getJoinedTables());
+    String joinTableName = q.getJoinTableName();
     String tempTableName = "temp_" + RandomStringUtils.randomAlphanumeric(8).toLowerCase();
     String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
