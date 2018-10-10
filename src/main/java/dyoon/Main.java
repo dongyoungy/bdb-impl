@@ -20,7 +20,7 @@ public class Main {
   private static final String DATABASE = "tpcds_5000_parquet";
 
   private static final long UNIFORM_THRESHOLD = 100000;
-  private static final double MIN_IO_REDUCTION_RATIO = 0.5;
+  private static final double MIN_IO_REDUCTION_RATIO = (2.0/3.0);
   private static final double Z = 2.576; // 99% CI
   private static final double E = 0.01; // 1% error
 

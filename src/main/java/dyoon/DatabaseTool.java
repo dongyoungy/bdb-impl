@@ -74,14 +74,8 @@ public class DatabaseTool {
       ResultSet rs = conn.createStatement().executeQuery("SHOW TABLES");
       while (rs.next()) {
         String table = rs.getString(1);
-        boolean containsAll = true;
-        for (String t : q.getJoinedTables()) {
-          if (!table.toLowerCase().contains(t)) {
-            containsAll = false;
-            break;
-          }
-        }
-        if (containsAll) {
+        String tab = q.getJoinTableName();
+        if (table.toLowerCase().equals(tab.toLowerCase())) {
           return table;
         }
       }

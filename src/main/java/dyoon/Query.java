@@ -40,7 +40,7 @@ public class Query {
     this.queryColumnSet = new TreeSet<>(queryColumns);
     this.joinedTables = new TreeSet<>(joinedTables);
     this.joinColumns = new HashSet<>(joinColumns);
-    this.joinTableName = Joiner.on("_").join(joinedTables);
+    this.joinTableName = Joiner.on("_").join(this.joinedTables);
   }
 
   public String getJoinTableName() {
