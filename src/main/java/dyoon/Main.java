@@ -36,14 +36,15 @@ public class Main {
 
       for (Query q : queries) {
         tool.findOrCreateJoinTable(q);
-        Pair<Long, Double> groupCountAndSize = tool.getGroupCountAndSize(q);
-        long groupCount = groupCountAndSize.getLeft();
-        double avgGroupSize = groupCountAndSize.getRight();
-        double sampleSize = getSampleSize(avgGroupSize, Z, E);
+        Stat groupCountAndSize = tool.getGroupCountAndSize(q);
+        long groupCount = groupCountAndSize.getGroupCount();
+        double avgGroupSize = groupCountAndSize.getAvgGroupSize();
+        long maxGroupSize = groupCountAndSize.getMaxGroupSize();
+        double sampleSize = getSampleSize((double)maxGroupSize, Z, E);
         System.out.println(
             String.format(
-                "For query %d (group count = %d, avg group size = %f, target sample size = %f:",
-                q.getId(), groupCount, avgGroupSize, sampleSize));
+                "For query %d (group count = %d, avg group size = %f, max group size = %d, target sample size = %f:",
+                q.getId(), groupCount, avgGroupSize, maxGroupSize, sampleSize));
         System.out.print("\t");
         if (avgGroupSize > UNIFORM_THRESHOLD) {
           System.out.println(
@@ -51,7 +52,7 @@ public class Main {
                   "Create %f%% uniform sample on %s.",
                   UNIFORM_THRESHOLD / avgGroupSize, q.getFactTable()));
         } else {
-          if ((sampleSize / avgGroupSize) <= MIN_IO_REDUCTION_RATIO) {
+          if ((sampleSize / (double)maxGroupSize) <= MIN_IO_REDUCTION_RATIO) {
             System.out.println(
                 String.format(
                     "Create stratified sample on %s with (%s) and %d min rows.",

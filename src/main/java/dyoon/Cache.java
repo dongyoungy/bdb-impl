@@ -14,6 +14,7 @@ public class Cache {
   public static final String TABLE_SIZE_SUFFIX = ".tablesize";
   public static final String GROUP_COUNT_SUFFIX = ".groupcount";
   public static final String AVG_GROUP_SIZE_SUFFIX = ".avggroupsize";
+  public static final String MAX_GROUP_SIZE_SUFFIX = ".maxgroupsize";
 
   private static final String CACHE_FILE_PATH = "." + File.separator + "cache";
 
@@ -139,6 +140,18 @@ public class Cache {
   public void setAverageGroupSize(Query q, Double value) {
     String key =
         String.format("%s_%s_%s", q.getFactTable(), q.getQCSString(), AVG_GROUP_SIZE_SUFFIX);
+    this.put(key, value);
+  }
+
+  public Long getMaxGroupSize(Query q) {
+    String key =
+        String.format("%s_%s_%s", q.getFactTable(), q.getQCSString(), MAX_GROUP_SIZE_SUFFIX);
+    return (Long) this.get(key);
+  }
+
+  public void setMaxGroupSize(Query q, Long value) {
+    String key =
+        String.format("%s_%s_%s", q.getFactTable(), q.getQCSString(), MAX_GROUP_SIZE_SUFFIX);
     this.put(key, value);
   }
 }
