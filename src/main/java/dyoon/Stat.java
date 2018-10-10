@@ -7,11 +7,21 @@ public class Stat {
   private long groupCount;
   private double avgGroupSize;
   private long maxGroupSize;
+  private long minGroupSize;
 
-  public Stat(long groupCount, double avgGroupSize, long maxGroupSize) {
+  public Stat(long groupCount, double avgGroupSize, long minGroupSize, long maxGroupSize) {
     this.groupCount = groupCount;
     this.avgGroupSize = avgGroupSize;
+    this.minGroupSize = minGroupSize;
     this.maxGroupSize = maxGroupSize;
+  }
+
+  public long getMinGroupSize() {
+    return minGroupSize;
+  }
+
+  public void setMinGroupSize(long minGroupSize) {
+    this.minGroupSize = minGroupSize;
   }
 
   public long getGroupCount() {

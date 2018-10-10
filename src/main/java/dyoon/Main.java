@@ -20,7 +20,7 @@ public class Main {
   private static final String DATABASE = "tpcds_5000_parquet";
 
   private static final long UNIFORM_THRESHOLD = 100000;
-  private static final double MIN_IO_REDUCTION_RATIO = (2.0/3.0);
+  private static final double MIN_IO_REDUCTION_RATIO = (2.0 / 3.0);
   private static final double Z = 2.576; // 99% CI
   private static final double E = 0.01; // 1% error
 
@@ -39,12 +39,14 @@ public class Main {
         Stat groupCountAndSize = tool.getGroupCountAndSize(q);
         long groupCount = groupCountAndSize.getGroupCount();
         double avgGroupSize = groupCountAndSize.getAvgGroupSize();
+        long minGroupSize = groupCountAndSize.getMinGroupSize();
         long maxGroupSize = groupCountAndSize.getMaxGroupSize();
-        double sampleSize = getSampleSize((double)maxGroupSize, Z, E);
+        double sampleSize = getSampleSize((double) maxGroupSize, Z, E);
         System.out.println(
             String.format(
-                "For query %d (group count = %d, avg group size = %f, max group size = %d, target sample size = %f:",
-                q.getId(), groupCount, avgGroupSize, maxGroupSize, sampleSize));
+                "For query %d (group count = %d, avg group size = %f, min group size = %d, "
+                    + "max group size = %d, target sample size = %f:",
+                q.getId(), groupCount, avgGroupSize, minGroupSize, maxGroupSize, sampleSize));
         System.out.print("\t");
         if (avgGroupSize > UNIFORM_THRESHOLD) {
           System.out.println(
@@ -52,7 +54,7 @@ public class Main {
                   "Create %f%% uniform sample on %s.",
                   UNIFORM_THRESHOLD / avgGroupSize, q.getFactTable()));
         } else {
-          if ((sampleSize / (double)maxGroupSize) <= MIN_IO_REDUCTION_RATIO) {
+          if ((sampleSize / (double) maxGroupSize) <= MIN_IO_REDUCTION_RATIO) {
             System.out.println(
                 String.format(
                     "Create stratified sample on %s with (%s) and %d min rows.",

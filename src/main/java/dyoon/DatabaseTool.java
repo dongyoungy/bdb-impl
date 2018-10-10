@@ -102,11 +102,16 @@ public class DatabaseTool {
     long groupCount = 0;
     double avgGroupSize = 0;
     long maxGroupSize = 0;
-    if (cache.getGroupCount(q) != null && cache.getAverageGroupSize(q) != null && cache.getMaxGroupSize(q) != null) {
+    long minGroupSize = 0;
+    if (cache.getGroupCount(q) != null
+        && cache.getAverageGroupSize(q) != null
+        && cache.getMaxGroupSize(q) != null
+        && cache.getMinGroupSize(q) != null) {
       groupCount = cache.getGroupCount(q);
       avgGroupSize = cache.getAverageGroupSize(q);
       maxGroupSize = cache.getMaxGroupSize(q);
-      return new Stat(groupCount, avgGroupSize, maxGroupSize);
+      minGroupSize = cache.getMinGroupSize(q);
+      return new Stat(groupCount, avgGroupSize, minGroupSize, maxGroupSize);
     }
     Joiner j = Joiner.on("_");
     String joinTableName = q.getJoinTableName();
@@ -125,12 +130,15 @@ public class DatabaseTool {
           conn.createStatement()
               .executeQuery(
                   String.format(
-                      "SELECT count(*) as group_count, avg(groupsize) as avg_group_size, max(groupsize) as max_group_size from %s",
+                      "SELECT count(*) as group_count, avg(groupsize) as avg_group_size,"
+                          + "min(groupsize) as min_group_size,"
+                          + "max(groupsize) as max_group_size from %s",
                       tempTableName));
 
       if (rs.next()) {
         groupCount = rs.getLong("group_count");
         avgGroupSize = rs.getDouble("avg_group_size");
+        minGroupSize = rs.getLong("min_group_size");
         maxGroupSize = rs.getLong("max_group_size");
       }
       conn.createStatement().execute(String.format("DROP TABLE IF EXISTS %s", tempTableName));
@@ -140,7 +148,8 @@ public class DatabaseTool {
 
     cache.setGroupCount(q, groupCount);
     cache.setAverageGroupSize(q, avgGroupSize);
+    cache.setMinGroupSize(q, minGroupSize);
     cache.setMaxGroupSize(q, maxGroupSize);
-    return new Stat(groupCount, avgGroupSize, maxGroupSize);
+    return new Stat(groupCount, avgGroupSize, minGroupSize, maxGroupSize);
   }
 }
