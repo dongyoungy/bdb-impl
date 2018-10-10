@@ -60,17 +60,17 @@ public class Main {
         if (avgGroupSize > UNIFORM_THRESHOLD) {
           System.out.println(
               String.format(
-                  "Create %f%% uniform sample on %s.",
-                  UNIFORM_THRESHOLD / avgGroupSize, q.getFactTable()));
+                  "Create %f %% uniform sample on %s.",
+                  (UNIFORM_THRESHOLD / avgGroupSize) * 100, q.getFactTable()));
         } else {
           double ratio = targetSampleSize / (double) populationSize;
           if (ratio <= MIN_IO_REDUCTION_RATIO) {
             System.out.println(
                 String.format(
                     "Create stratified sample on %s with (%s) for estimated sample size of %.2f %%.",
-                    q.getFactTable(), q.getQCSString(), ratio));
+                    q.getFactTable(), q.getQCSString(), ratio * 100));
           } else {
-            System.out.println(String.format("No viable samples (ratio = %.2f %%).", ratio));
+            System.out.println(String.format("No viable samples (ratio = %.2f %%).", ratio * 100));
           }
         }
       }
