@@ -1,7 +1,9 @@
 package dyoon;
 
+import java.io.Serializable;
+
 /** Created by Dong Young Yoon on 10/9/18. */
-public class Stat {
+public class Stat implements Serializable {
   private long groupCount;
   private double avgGroupSize;
   private double targetSampleSize;

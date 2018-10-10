@@ -14,7 +14,7 @@ import java.util.TreeSet;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Query {
-  private int id;
+  private String id;
   private String joinTableName;
   private String query = "";
   private SortedSet<String> queryColumnSet;
@@ -32,7 +32,7 @@ public class Query {
   };
 
   public Query(
-      int id,
+      String id,
       List<String> queryColumns,
       List<String> joinedTables,
       List<Pair<String, String>> joinColumns) {
@@ -71,7 +71,7 @@ public class Query {
     return null;
   }
 
-  public int getId() {
+  public String getId() {
     return id;
   }
 

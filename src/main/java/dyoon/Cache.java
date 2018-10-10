@@ -1,7 +1,14 @@
 package dyoon;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by Dong Young Yoon on 3/20/18.
@@ -12,6 +19,7 @@ import java.util.*;
 public class Cache {
 
   public static final String TABLE_SIZE_SUFFIX = ".tablesize";
+  public static final String TABLE_STAT_SUFFIX = ".tablestat";
   public static final String GROUP_COUNT_SUFFIX = ".groupcount";
   public static final String AVG_GROUP_SIZE_SUFFIX = ".avggroupsize";
   public static final String MAX_GROUP_SIZE_SUFFIX = ".maxgroupsize";
@@ -166,5 +174,13 @@ public class Cache {
     String key =
         String.format("%s_%s_%s", q.getFactTable(), q.getQCSString(), MIN_GROUP_SIZE_SUFFIX);
     this.put(key, value);
+  }
+
+  public void saveStat(String table, Stat stat) {
+    this.put(table + TABLE_STAT_SUFFIX, stat);
+  }
+
+  public Stat loadStat(String table) {
+    return (Stat) this.get(table + TABLE_STAT_SUFFIX);
   }
 }

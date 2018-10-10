@@ -107,8 +107,11 @@ public class DatabaseTool {
     double targetSampleSize = 0;
 
     String joinTableName = q.getJoinTableName();
-    String statTableName = String.format("q%d__%.4f__%.4f", q.getId(), Z, E);
+    String statTableName = String.format("q%s__%.4f__%.4f", q.getId(), Z, E);
     statTableName = statTableName.replaceAll("\\.", "_");
+    if (cache.loadStat(statTableName) != null) {
+      return cache.loadStat(statTableName);
+    }
     String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
     try {
@@ -148,7 +151,10 @@ public class DatabaseTool {
       e.printStackTrace();
     }
 
-    return new Stat(
-        populationSize, targetSampleSize, groupCount, avgGroupSize, minGroupSize, maxGroupSize);
+    Stat stat =
+        new Stat(
+            populationSize, targetSampleSize, groupCount, avgGroupSize, minGroupSize, maxGroupSize);
+    cache.saveStat(statTableName, stat);
+    return stat;
   }
 }
