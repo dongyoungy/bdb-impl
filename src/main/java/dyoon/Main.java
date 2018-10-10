@@ -37,16 +37,25 @@ public class Main {
       for (Query q : queries) {
         tool.findOrCreateJoinTable(q);
         Stat groupCountAndSize = tool.getGroupCountAndSize(q);
+        long populationSize = groupCountAndSize.getPopulationSize();
+        double targetSampleSize = groupCountAndSize.getTargetSampleSize();
         long groupCount = groupCountAndSize.getGroupCount();
         double avgGroupSize = groupCountAndSize.getAvgGroupSize();
         long minGroupSize = groupCountAndSize.getMinGroupSize();
         long maxGroupSize = groupCountAndSize.getMaxGroupSize();
-        double sampleSize = getSampleSize((double) maxGroupSize, Z, E);
+        //        double sampleSize = getSampleSize((double) maxGroupSize, Z, E);
         System.out.println(
             String.format(
-                "For query %d (group count = %d, avg group size = %f, min group size = %d, "
-                    + "max group size = %d, target sample size = %f:",
-                q.getId(), groupCount, avgGroupSize, minGroupSize, maxGroupSize, sampleSize));
+                "For query %d (population = %d, target sample size = %.3f, "
+                    + "group count = %d, avg group size = %.3f, min group size = %d, "
+                    + "max group size = %d:",
+                q.getId(),
+                populationSize,
+                targetSampleSize,
+                groupCount,
+                avgGroupSize,
+                minGroupSize,
+                maxGroupSize));
         System.out.print("\t");
         if (avgGroupSize > UNIFORM_THRESHOLD) {
           System.out.println(
@@ -54,13 +63,14 @@ public class Main {
                   "Create %f%% uniform sample on %s.",
                   UNIFORM_THRESHOLD / avgGroupSize, q.getFactTable()));
         } else {
-          if ((sampleSize / (double) maxGroupSize) <= MIN_IO_REDUCTION_RATIO) {
+          double ratio = targetSampleSize / (double) populationSize;
+          if (ratio <= MIN_IO_REDUCTION_RATIO) {
             System.out.println(
                 String.format(
-                    "Create stratified sample on %s with (%s) and %d min rows.",
-                    q.getFactTable(), q.getQCSString(), (long) Math.ceil(sampleSize)));
+                    "Create stratified sample on %s with (%s) for estimated sample size of %.2f %%.",
+                    q.getFactTable(), q.getQCSString(), ratio));
           } else {
-            System.out.println("No viable samples.");
+            System.out.println(String.format("No viable samples (ratio = %.2f %%).", ratio));
           }
         }
       }

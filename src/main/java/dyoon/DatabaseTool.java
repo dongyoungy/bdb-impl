@@ -1,8 +1,6 @@
 package dyoon;
 
 import com.google.common.base.Joiner;
-import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.sql.Connection;
@@ -11,12 +9,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class DatabaseTool {
   private Connection conn;
   private Cache cache;
+
+  private static final double Z = 2.576; // 99% CI
+  private static final double E = 0.01; // 1% error
 
   public DatabaseTool(Connection conn) {
     this.conn = conn;
@@ -99,57 +99,56 @@ public class DatabaseTool {
   }
 
   public Stat getGroupCountAndSize(Query q) {
+    long populationSize = 0;
     long groupCount = 0;
     double avgGroupSize = 0;
     long maxGroupSize = 0;
     long minGroupSize = 0;
-    if (cache.getGroupCount(q) != null
-        && cache.getAverageGroupSize(q) != null
-        && cache.getMaxGroupSize(q) != null
-        && cache.getMinGroupSize(q) != null) {
-      groupCount = cache.getGroupCount(q);
-      avgGroupSize = cache.getAverageGroupSize(q);
-      maxGroupSize = cache.getMaxGroupSize(q);
-      minGroupSize = cache.getMinGroupSize(q);
-      return new Stat(groupCount, avgGroupSize, minGroupSize, maxGroupSize);
-    }
-    Joiner j = Joiner.on("_");
+    double targetSampleSize = 0;
+
     String joinTableName = q.getJoinTableName();
-    String tempTableName = "temp_" + RandomStringUtils.randomAlphanumeric(8).toLowerCase();
+    String statTableName = String.format("q%d__%.4f__%.4f", q.getId(), Z, E);
+    statTableName = statTableName.replaceAll("\\.", "_");
     String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
     try {
-      conn.createStatement()
-          .execute(
-              String.format(
-                  "CREATE TABLE %s STORED AS parquet AS SELECT %s,"
-                      + "count(*) as groupsize from %s GROUP BY %s",
-                  tempTableName, qcsCols, joinTableName, qcsCols));
+      if (!checkTableExists(statTableName)) {
+        conn.createStatement()
+            .execute(
+                String.format(
+                    "CREATE TABLE %s STORED AS parquet AS SELECT %s, groupsize,"
+                        + "(groupsize * (pow(%f,2)*0.25 / pow(%f,2)) ) / (groupsize + (pow(%f,2)*0.25 / pow(%f,2)) - 1) as target_group_sample_size "
+                        + "FROM "
+                        + "(SELECT %s,"
+                        + "count(*) as groupsize from %s GROUP BY %s) t",
+                    statTableName, qcsCols, Z, E, Z, E, qcsCols, joinTableName, qcsCols));
+      }
 
       ResultSet rs =
           conn.createStatement()
               .executeQuery(
                   String.format(
-                      "SELECT count(*) as group_count, avg(groupsize) as avg_group_size,"
+                      "SELECT count(*) as group_count, sum(groupsize) as population_size, "
+                          + "sum(target_group_sample_size) as target_sample_size, "
+                          + "avg(groupsize) as avg_group_size,"
                           + "min(groupsize) as min_group_size,"
-                          + "max(groupsize) as max_group_size from %s",
-                      tempTableName));
+                          + "max(groupsize) as max_group_size "
+                          + "FROM %s",
+                      statTableName));
 
       if (rs.next()) {
+        populationSize = rs.getLong("population_size");
+        targetSampleSize = rs.getDouble("target_sample_size");
         groupCount = rs.getLong("group_count");
         avgGroupSize = rs.getDouble("avg_group_size");
         minGroupSize = rs.getLong("min_group_size");
         maxGroupSize = rs.getLong("max_group_size");
       }
-      conn.createStatement().execute(String.format("DROP TABLE IF EXISTS %s", tempTableName));
     } catch (SQLException e) {
       e.printStackTrace();
     }
 
-    cache.setGroupCount(q, groupCount);
-    cache.setAverageGroupSize(q, avgGroupSize);
-    cache.setMinGroupSize(q, minGroupSize);
-    cache.setMaxGroupSize(q, maxGroupSize);
-    return new Stat(groupCount, avgGroupSize, minGroupSize, maxGroupSize);
+    return new Stat(
+        populationSize, targetSampleSize, groupCount, avgGroupSize, minGroupSize, maxGroupSize);
   }
 }

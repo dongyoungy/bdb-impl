@@ -1,15 +1,23 @@
 package dyoon;
 
-/**
- * Created by Dong Young Yoon on 10/9/18.
- */
+/** Created by Dong Young Yoon on 10/9/18. */
 public class Stat {
   private long groupCount;
   private double avgGroupSize;
+  private double targetSampleSize;
+  private long populationSize;
   private long maxGroupSize;
   private long minGroupSize;
 
-  public Stat(long groupCount, double avgGroupSize, long minGroupSize, long maxGroupSize) {
+  public Stat(
+      long populationSize,
+      double targetSampleSize,
+      long groupCount,
+      double avgGroupSize,
+      long minGroupSize,
+      long maxGroupSize) {
+    this.populationSize = populationSize;
+    this.targetSampleSize = targetSampleSize;
     this.groupCount = groupCount;
     this.avgGroupSize = avgGroupSize;
     this.minGroupSize = minGroupSize;
@@ -46,5 +54,21 @@ public class Stat {
 
   public void setMaxGroupSize(long maxGroupSize) {
     this.maxGroupSize = maxGroupSize;
+  }
+
+  public double getTargetSampleSize() {
+    return targetSampleSize;
+  }
+
+  public void setTargetSampleSize(double targetSampleSize) {
+    this.targetSampleSize = targetSampleSize;
+  }
+
+  public long getPopulationSize() {
+    return populationSize;
+  }
+
+  public void setPopulationSize(long populationSize) {
+    this.populationSize = populationSize;
   }
 }
