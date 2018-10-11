@@ -167,6 +167,10 @@ public class DatabaseTool {
     }
     String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
+    if (stat != null && stat.getPopulationSize() == 0) {
+      stat = null;
+    }
+
     try {
       if (!checkTableExists(statTableName)) {
         if (stat != null) {

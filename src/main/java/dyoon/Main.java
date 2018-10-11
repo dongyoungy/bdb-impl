@@ -1685,7 +1685,7 @@ public class Main {
 
     List<Pair<String, String>> q96JoinCols = new ArrayList<>();
     String q96Tables = "store_sales";
-    String q96QCS = "ss_sole_time_sk, ss_hdemo_sk, ss_store_sk";
+    String q96QCS = "ss_sold_time_sk, ss_hdemo_sk, ss_store_sk";
     Query q96 =
         new Query(
             "96_nj",
