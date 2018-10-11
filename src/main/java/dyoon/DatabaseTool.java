@@ -29,6 +29,12 @@ public class DatabaseTool {
     return tables.next();
   }
 
+  public boolean checkTableExists(Prejoin table) throws SQLException {
+    DatabaseMetaData dbm = conn.getMetaData();
+    ResultSet tables = dbm.getTables(null, table.getDatabase(), table.getName(), null);
+    return tables.next();
+  }
+
   public void findOrCreateJoinTable(Query q) {
 
     if (q.getJoinedTables().isEmpty()) {
@@ -69,6 +75,35 @@ public class DatabaseTool {
     }
   }
 
+  public void createPrejoinTable(Prejoin p) {
+
+    String database = p.getDatabase();
+    String joinTableName = p.getName();
+    Joiner j2 = Joiner.on(",");
+    Joiner j3 = Joiner.on(" AND ");
+
+    String joinTables = j2.join(p.getTableSet());
+
+    List<String> joinColumns = new ArrayList<>();
+    for (Pair<String, String> pair : p.getJoinColumnSet()) {
+      joinColumns.add(pair.getLeft() + " = " + pair.getRight());
+    }
+    String joinClause = j3.join(joinColumns);
+
+    try {
+      if (!checkTableExists(joinTableName)) {
+        String sql =
+            String.format(
+                "CREATE TABLE %s.%s STORED AS parquet AS SELECT * FROM %s WHERE %s",
+                database, joinTableName, joinTables, joinClause);
+        System.out.println("Creating join table:\n\t" + sql);
+        conn.createStatement().execute(sql);
+      }
+    } catch (SQLException e) {
+      e.printStackTrace();
+    }
+  }
+
   private String findJoinTable(Query q) {
     try {
       ResultSet rs = conn.createStatement().executeQuery("SHOW TABLES");
@@ -98,63 +133,100 @@ public class DatabaseTool {
     return columns;
   }
 
-  public Stat getGroupCountAndSize(Query q) {
+  public Stat getGroupCountAndSize(String database, Query q, List<Prejoin> prejoins) {
     long populationSize = 0;
     long groupCount = 0;
     double avgGroupSize = 0;
     long maxGroupSize = 0;
     long minGroupSize = 0;
     double targetSampleSize = 0;
+    String joinTableName = "";
 
-    String joinTableName = q.getJoinTableName();
+    if (q.getJoinedTables().size() == 1) {
+      joinTableName = q.getFactTable();
+    } else {
+      for (Prejoin prejoin : prejoins) {
+        if (prejoin.supports(database, q)) {
+          joinTableName = prejoin.getName();
+          break;
+        }
+      }
+    }
+
+    if (joinTableName.isEmpty()) {
+      return null;
+    }
+
+    Stat stat = null;
     String statTableName = String.format("q%s__%.4f__%.4f", q.getId(), Z, E);
     statTableName = statTableName.replaceAll("\\.", "_");
-    if (cache.loadStat(statTableName) != null) {
-      return cache.loadStat(statTableName);
+    if (cache.loadStat(database, statTableName) != null) {
+      stat = cache.loadStat(database, statTableName);
+    } else if (cache.loadStat(database + "__" + q.getUniqueName()) != null) {
+      stat = cache.loadStat(database + "__" + q.getUniqueName());
     }
     String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
     try {
       if (!checkTableExists(statTableName)) {
-        conn.createStatement()
-            .execute(
-                String.format(
-                    "CREATE TABLE %s STORED AS parquet AS SELECT %s, groupsize,"
-                        + "(groupsize * (pow(%f,2)*0.25 / pow(%f,2)) ) / (groupsize + (pow(%f,2)*0.25 / pow(%f,2)) - 1) as target_group_sample_size "
-                        + "FROM "
-                        + "(SELECT %s,"
-                        + "count(*) as groupsize from %s GROUP BY %s) t",
-                    statTableName, qcsCols, Z, E, Z, E, qcsCols, joinTableName, qcsCols));
+        if (stat != null) {
+          conn.createStatement()
+              .execute(
+                  String.format(
+                      "CREATE TABLE %s STORED AS parquet AS SELECT * FROM %s",
+                      statTableName, stat.getTableName()));
+        } else {
+          conn.createStatement()
+              .execute(
+                  String.format(
+                      "CREATE TABLE %s STORED AS parquet AS SELECT %s, groupsize,"
+                          + "(groupsize * (pow(%f,2)*0.25 / pow(%f,2)) ) / (groupsize + (pow(%f,2)*0.25 / pow(%f,2)) - 1) as target_group_sample_size "
+                          + "FROM "
+                          + "(SELECT %s,"
+                          + "count(*) as groupsize from %s GROUP BY %s) t",
+                      statTableName, qcsCols, Z, E, Z, E, qcsCols, joinTableName, qcsCols));
+        }
       }
 
-      ResultSet rs =
-          conn.createStatement()
-              .executeQuery(
-                  String.format(
-                      "SELECT count(*) as group_count, sum(groupsize) as population_size, "
-                          + "sum(target_group_sample_size) as target_sample_size, "
-                          + "avg(groupsize) as avg_group_size,"
-                          + "min(groupsize) as min_group_size,"
-                          + "max(groupsize) as max_group_size "
-                          + "FROM %s",
-                      statTableName));
+      if (stat == null) {
+        ResultSet rs =
+            conn.createStatement()
+                .executeQuery(
+                    String.format(
+                        "SELECT count(*) as group_count, sum(groupsize) as population_size, "
+                            + "sum(target_group_sample_size) as target_sample_size, "
+                            + "avg(groupsize) as avg_group_size,"
+                            + "min(groupsize) as min_group_size,"
+                            + "max(groupsize) as max_group_size "
+                            + "FROM %s",
+                        statTableName));
 
-      if (rs.next()) {
-        populationSize = rs.getLong("population_size");
-        targetSampleSize = rs.getDouble("target_sample_size");
-        groupCount = rs.getLong("group_count");
-        avgGroupSize = rs.getDouble("avg_group_size");
-        minGroupSize = rs.getLong("min_group_size");
-        maxGroupSize = rs.getLong("max_group_size");
+        if (rs.next()) {
+          populationSize = rs.getLong("population_size");
+          targetSampleSize = rs.getDouble("target_sample_size");
+          groupCount = rs.getLong("group_count");
+          avgGroupSize = rs.getDouble("avg_group_size");
+          minGroupSize = rs.getLong("min_group_size");
+          maxGroupSize = rs.getLong("max_group_size");
+        }
+
+        stat =
+            new Stat(
+                database,
+                q,
+                statTableName,
+                populationSize,
+                targetSampleSize,
+                groupCount,
+                avgGroupSize,
+                minGroupSize,
+                maxGroupSize);
       }
     } catch (SQLException e) {
       e.printStackTrace();
     }
 
-    Stat stat =
-        new Stat(
-            populationSize, targetSampleSize, groupCount, avgGroupSize, minGroupSize, maxGroupSize);
-    cache.saveStat(statTableName, stat);
+    cache.saveStat(database, statTableName, stat);
     return stat;
   }
 }

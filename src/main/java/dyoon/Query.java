@@ -21,7 +21,7 @@ public class Query {
   private SortedSet<String> joinedTables;
   private Set<Pair<String, String>> joinColumns;
 
-  private static final String[] FACT_TABLES = {
+  public static final String[] FACT_TABLES = {
     "store_sales",
     "store_returns",
     "catalog_sales",
@@ -73,6 +73,10 @@ public class Query {
 
   public String getId() {
     return id;
+  }
+
+  public String getUniqueName() {
+    return Joiner.on("_").join(joinedTables) + "__" + getQCSString();
   }
 
   public String getFactTable() {

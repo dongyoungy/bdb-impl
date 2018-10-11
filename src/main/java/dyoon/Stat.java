@@ -4,6 +4,8 @@ import java.io.Serializable;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Stat implements Serializable {
+  private String id;
+  private String tableName;
   private long groupCount;
   private double avgGroupSize;
   private double targetSampleSize;
@@ -12,18 +14,31 @@ public class Stat implements Serializable {
   private long minGroupSize;
 
   public Stat(
+      String database,
+      Query q,
+      String tableName,
       long populationSize,
       double targetSampleSize,
       long groupCount,
       double avgGroupSize,
       long minGroupSize,
       long maxGroupSize) {
+    this.id = database + "__" + q.getUniqueName();
+    this.tableName = tableName;
     this.populationSize = populationSize;
     this.targetSampleSize = targetSampleSize;
     this.groupCount = groupCount;
     this.avgGroupSize = avgGroupSize;
     this.minGroupSize = minGroupSize;
     this.maxGroupSize = maxGroupSize;
+  }
+
+  public String getId() {
+    return id;
+  }
+
+  public String getTableName() {
+    return tableName;
   }
 
   public long getMinGroupSize() {

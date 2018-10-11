@@ -7,7 +7,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -176,11 +178,34 @@ public class Cache {
     this.put(key, value);
   }
 
-  public void saveStat(String table, Stat stat) {
-    this.put(table + TABLE_STAT_SUFFIX, stat);
+  public void saveStat(String database, String table, Stat stat) {
+    this.put(database + "_" + table + TABLE_STAT_SUFFIX, stat);
+    this.put(stat.getId() + TABLE_STAT_SUFFIX, stat);
   }
 
-  public Stat loadStat(String table) {
-    return (Stat) this.get(table + TABLE_STAT_SUFFIX);
+  public Stat loadStat(String database, String table) {
+    return (Stat) this.get(database + "_" + table + TABLE_STAT_SUFFIX);
+  }
+
+  public Stat loadStat(String id) {
+    return (Stat) this.get(id + TABLE_STAT_SUFFIX);
+  }
+
+  public void addPrejoin(Prejoin p) {
+    this.put(p.getName(), p);
+  }
+
+  public void removePrejoin(Prejoin p) {
+    this.remove(p.getName());
+  }
+
+  public List<Prejoin> getPrejoins(String database) {
+    List<Prejoin> list = new ArrayList<>();
+    for (String key : cache.keySet()) {
+      if (key.startsWith(Prejoin.PREJOIN_PREFIX + database)) {
+        list.add((Prejoin) this.get(key));
+      }
+    }
+    return list;
   }
 }
