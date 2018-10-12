@@ -28,8 +28,8 @@ public class Main {
 
   public static void main(String[] args) {
     Connection conn = null;
-    setQueriesWithoutPrejoin();
-    //    setQueries();
+    //    setQueriesWithoutPrejoin();
+    setQueries();
 
     try {
       Class.forName("com.cloudera.impala.jdbc41.Driver");
