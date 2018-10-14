@@ -21,6 +21,9 @@ public class Args {
   @Parameter(names = "--prejoin", description = "Use prejoins")
   private boolean prejoin = false;
 
+  @Parameter(names = "--overwrite", description = "overwrite samples")
+  private boolean overwrite = false;
+
   @Parameter(names = "--load-prejoin-file", description = "Load prejoin meta from file")
   private String loadPrejoinFile = "";
 
@@ -49,5 +52,9 @@ public class Args {
 
   public String getLoadPrejoinFile() {
     return loadPrejoinFile;
+  }
+
+  public boolean isOverwrite() {
+    return overwrite;
   }
 }

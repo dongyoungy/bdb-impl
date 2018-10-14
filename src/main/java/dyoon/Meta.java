@@ -188,7 +188,7 @@ public class Meta {
             META_NAME);
     try {
       ResultSet rs = conn.createStatement().executeQuery(sql);
-      if (rs.next()) {
+      while (rs.next()) {
         String json = rs.getString("value");
         ObjectMapper mapper = new ObjectMapper();
         Prejoin p = mapper.readValue(json, Prejoin.class);

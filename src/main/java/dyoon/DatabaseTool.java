@@ -45,11 +45,11 @@ public class DatabaseTool {
     this.meta.addPrejoin(p);
   }
 
-  public void createSample(final String database, final Sample s) {
+  public void createSample(final String database, final Sample s, boolean overwrite) {
     final String sampleTable = s.toString();
 
     try {
-      if (this.checkTableExists(sampleTable)) {
+      if (this.checkTableExists(sampleTable) && !overwrite) {
         // sample already exists
         return;
       }
@@ -103,7 +103,7 @@ public class DatabaseTool {
 
     final String createSql =
         String.format(
-            "CREATE TABLE %s.%s LIKE %s.%s STORED as parquet",
+            "CREATE TABLE IF NOT EXISTS %s.%s LIKE %s.%s STORED as parquet",
             database, sampleTable, database, factTable);
 
     this.conn.createStatement().execute(createSql);
@@ -140,7 +140,7 @@ public class DatabaseTool {
     final List<String> factTableColumns = this.getColumns(factTable);
     final String createSql =
         String.format(
-            "CREATE TABLE %s.%s LIKE %s.%s STORED as parquet",
+            "CREATE TABLE IF NOT EXISTS %s.%s LIKE %s.%s STORED as parquet",
             database, sampleTable, database, factTable);
 
     conn.createStatement().execute(createSql);

@@ -76,7 +76,7 @@ public class Main {
     // for test
     //    List<Query> testQueries = new ArrayList<>();
     //    for (Query query : queries) {
-    //      if (query.getId().equals("59_nj")) {
+    //      if (query.getId().equals("31_1")) {
     //        testQueries.add(query);
     //      }
     //    }
@@ -199,7 +199,7 @@ public class Main {
       // create samples
       if (args.isCreate()) {
         for (Sample sample : samplesToCreate) {
-          tool.createSample(database, sample);
+          tool.createSample(database, sample, args.isOverwrite());
         }
       }
 
