@@ -1,7 +1,6 @@
 package dyoon;
 
 import com.google.common.base.Joiner;
-import org.apache.commons.lang3.tuple.Pair;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -175,7 +174,7 @@ public class DatabaseTool {
     final String joinTables = j2.join(q.getJoinedTables());
 
     final List<String> joinColumns = new ArrayList<>();
-    for (final Pair<String, String> pair : q.getJoinColumns()) {
+    for (final ColumnPair pair : q.getJoinColumns()) {
       joinColumns.add(pair.getLeft() + " = " + pair.getRight());
     }
     final String joinClause = j3.join(joinColumns);
