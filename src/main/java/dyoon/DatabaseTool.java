@@ -63,8 +63,8 @@ public class DatabaseTool {
   private void createStratifiedSample(final String database, final Sample s) throws SQLException {
     final String sampleTable = s.toString();
     final String factTable = s.getQuery().getFactTable();
-    final String statTable =
-        String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
+    String statTable = String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
+    statTable = statTable.replaceAll("\\.", "_");
     if (!this.checkTableExists(statTable)) {
       System.out.println("Stat table does not exist: " + statTable);
       return;
