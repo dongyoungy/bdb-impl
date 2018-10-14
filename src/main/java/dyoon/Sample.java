@@ -18,7 +18,7 @@ public class Sample implements Serializable {
 
   private Query query;
   private String table;
-  private SortedSet<String> columns;
+  private TreeSet<String> columns;
   private Type type;
 
   private double ratio; // used by uniform

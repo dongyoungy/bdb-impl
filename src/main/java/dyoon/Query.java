@@ -19,9 +19,9 @@ public class Query implements Serializable {
   private String id;
   private String joinTableName;
   private String query = "";
-  private SortedSet<String> queryColumnSet;
-  private SortedSet<String> joinedTables;
-  private Set<Pair<String, String>> joinColumns;
+  private TreeSet<String> queryColumnSet;
+  private TreeSet<String> joinedTables;
+  private HashSet<Pair<String, String>> joinColumns;
 
   public static final String[] FACT_TABLES = {
     "store_sales",
