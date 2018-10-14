@@ -26,6 +26,7 @@ public class Cache {
   public static final String AVG_GROUP_SIZE_SUFFIX = ".avggroupsize";
   public static final String MAX_GROUP_SIZE_SUFFIX = ".maxgroupsize";
   public static final String MIN_GROUP_SIZE_SUFFIX = ".mingroupsize";
+  public static final String SAMPLE_SUFFIX = ".sample";
 
   private static final String CACHE_FILE_PATH = "." + File.separator + "cache";
 
@@ -207,5 +208,9 @@ public class Cache {
       }
     }
     return list;
+  }
+
+  public void addSample(Sample s) {
+    this.put(s.toString() + SAMPLE_SUFFIX, s);
   }
 }

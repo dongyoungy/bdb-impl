@@ -1,5 +1,7 @@
 package dyoon;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.ParameterException;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -8,17 +10,14 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.PriorityQueue;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Main {
 
-  private static final String DATABASE = "tpcds_500_parquet";
-
-  private static final String HOST = "c220g5-110408.wisc.cloudlab.us";
-  private static final int PORT = 21050;
+  //  private static String DATABASE;
+  //  private static String HOST;
 
   private static final long UNIFORM_THRESHOLD = 100000;
   private static final double MIN_IO_REDUCTION_RATIO = (2.0 / 3.0);
@@ -26,19 +25,41 @@ public class Main {
   private static final double E = 0.01; // 1% error
   private static List<Query> queries = new ArrayList<>();
 
-  public static void main(String[] args) {
+  public static void main(String[] argv) {
+
+    Args args = new Args();
+    JCommander jc = JCommander.newBuilder().addObject(args).build();
+
+    try {
+      jc.parse(argv);
+    } catch (ParameterException e) {
+      e.getJCommander().usage();
+      return;
+    }
+
+    if (args.isHelp() || argv.length == 0) {
+      jc.usage();
+      return;
+    }
+
+    String database = args.getDatabase();
+    String host = args.getHost();
+
     Connection conn = null;
-    //    setQueriesWithoutPrejoin();
-    setQueries();
+    if (args.isPrejoin()) {
+      setQueries();
+    } else {
+      setQueriesWithoutPrejoin();
+    }
 
     try {
       Class.forName("com.cloudera.impala.jdbc41.Driver");
-      String connectionStr = String.format("jdbc:impala://%s:%d/%s", HOST, PORT, DATABASE);
+      String connectionStr = String.format("jdbc:impala://%s/%s", host, database);
       conn = DriverManager.getConnection(connectionStr, "", "");
       DatabaseTool tool = new DatabaseTool(conn);
 
       Cache cache = Cache.getInstance();
-      List<Prejoin> prejoinList = cache.getPrejoins(DATABASE);
+      List<Prejoin> prejoinList = cache.getPrejoins(database);
       PriorityQueue<Prejoin> prejoinQueue = new PriorityQueue<>(100, new PrejoinSizeComparator());
 
       for (Prejoin prejoin : prejoinList) {
@@ -49,7 +70,7 @@ public class Main {
 
       for (Query q : queries) {
         if (q.getJoinedTables().size() > 1) {
-          Prejoin p = new Prejoin(DATABASE, q.getFactTable());
+          Prejoin p = new Prejoin(database, q.getFactTable());
           for (String table : q.getJoinedTables()) {
             p.addTable(table);
           }
@@ -60,9 +81,8 @@ public class Main {
         }
       }
 
-      Iterator<Prejoin> it = prejoinQueue.iterator();
-      while (it.hasNext()) {
-        Prejoin p = it.next();
+      while (!prejoinQueue.isEmpty()) {
+        Prejoin p = prejoinQueue.poll();
         boolean exists = false;
         for (Prejoin availablePrejoin : prejoinList) {
           if (availablePrejoin.contains(p)) {
@@ -78,8 +98,10 @@ public class Main {
         }
       }
 
+      List<Sample> samplesToCreate = new ArrayList<>();
+
       for (Query q : queries) {
-        Stat groupCountAndSize = tool.getGroupCountAndSize(DATABASE, q, prejoinList);
+        Stat groupCountAndSize = tool.getGroupCountAndSize(database, q, prejoinList);
         if (groupCountAndSize == null) {
           System.out.println("Something wrong: stat null. Exiting.");
           System.exit(-1);
@@ -105,10 +127,16 @@ public class Main {
                 maxGroupSize));
         System.out.print("\t");
         if (avgGroupSize > UNIFORM_THRESHOLD) {
-          System.out.println(
-              String.format(
-                  "Create %f %% uniform sample on %s.",
-                  (UNIFORM_THRESHOLD / avgGroupSize) * 100, q.getFactTable()));
+          double ratio = UNIFORM_THRESHOLD / (double) avgGroupSize;
+          if (ratio <= MIN_IO_REDUCTION_RATIO) {
+            System.out.println(
+                String.format(
+                    "Create %f %% uniform sample on %s.",
+                    (UNIFORM_THRESHOLD / avgGroupSize) * 100, q.getFactTable()));
+            Sample s = new Sample(q, Sample.Type.UNIFORM, q.getFactTable(), q.getQueryColumnSet());
+            s.setRatio(ratio);
+            samplesToCreate.add(s);
+          }
         } else {
           double ratio = targetSampleSize / (double) populationSize;
           if (ratio <= MIN_IO_REDUCTION_RATIO) {
@@ -116,9 +144,21 @@ public class Main {
                 String.format(
                     "Create stratified sample on %s with (%s) for estimated sample size of %.2f %%.",
                     q.getFactTable(), q.getQCSString(), ratio * 100));
+            Sample s =
+                new Sample(q, Sample.Type.STRATIFIED, q.getFactTable(), q.getQueryColumnSet());
+            s.setE(E);
+            s.setZ(Z);
+            samplesToCreate.add(s);
           } else {
             System.out.println(String.format("No viable samples (ratio = %.2f %%).", ratio * 100));
           }
+        }
+      }
+
+      // create samples
+      if (args.isCreate()) {
+        for (Sample sample : samplesToCreate) {
+          tool.createSample(database, sample);
         }
       }
 

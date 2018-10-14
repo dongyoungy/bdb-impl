@@ -12,8 +12,12 @@
 
     <repositories>
         <repository>
-            <id>redshift</id>
-            <url>http://redshift-maven-repository.s3-website-us-east-1.amazonaws.com/release</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <id>central</id>
+            <name>Maven Repository Switchboard</name>
+            <url>http://repo1.maven.org/maven2</url>
         </repository>
         <!--  For Impala JDBC; https://stackoverflow.com/questions/26618192/install-local-jar-dependency-as-part-of-the-lifecycle-before-maven-attempts-to -->
         <repository>
@@ -127,6 +131,11 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
             <version>3.8.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.beust</groupId>
+            <artifactId>jcommander</artifactId>
+            <version>1.72</version>
         </dependency>
     </dependencies>
 

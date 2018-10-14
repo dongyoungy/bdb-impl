@@ -9,131 +9,232 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SortedSet;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class DatabaseTool {
-  private Connection conn;
-  private Cache cache;
+  private final Connection conn;
+  private final Cache cache;
 
   private static final double Z = 2.576; // 99% CI
   private static final double E = 0.01; // 1% error
 
-  public DatabaseTool(Connection conn) {
+  public DatabaseTool(final Connection conn) {
     this.conn = conn;
     this.cache = Cache.getInstance();
   }
 
-  public boolean checkTableExists(String table) throws SQLException {
-    DatabaseMetaData dbm = conn.getMetaData();
-    ResultSet tables = dbm.getTables(null, null, table, null);
+  public boolean checkTableExists(final String table) throws SQLException {
+    final DatabaseMetaData dbm = this.conn.getMetaData();
+    final ResultSet tables = dbm.getTables(null, null, table, null);
     return tables.next();
   }
 
-  public boolean checkTableExists(Prejoin table) throws SQLException {
-    DatabaseMetaData dbm = conn.getMetaData();
-    ResultSet tables = dbm.getTables(null, table.getDatabase(), table.getName(), null);
+  public boolean checkTableExists(final Prejoin table) throws SQLException {
+    final DatabaseMetaData dbm = this.conn.getMetaData();
+    final ResultSet tables = dbm.getTables(null, table.getDatabase(), table.getName(), null);
     return tables.next();
   }
 
-  public void findOrCreateJoinTable(Query q) {
+  public void createSample(final String database, final Sample s) {
+    final String sampleTable = s.toString();
+
+    try {
+      if (this.checkTableExists(sampleTable)) {
+        // sample already exists
+        return;
+      }
+
+      System.out.println("Creating a sample: " + sampleTable);
+      if (s.getType() == Sample.Type.UNIFORM) {
+        this.createUniformSample(database, s);
+      } else if (s.getType() == Sample.Type.STRATIFIED) {
+        this.createStratifiedSample(database, s);
+      } else {
+        System.out.println("Unsupported sample type: " + s.toString());
+        return;
+      }
+      cache.addSample(s);
+    } catch (final SQLException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private void createStratifiedSample(final String database, final Sample s) throws SQLException {
+    final String sampleTable = s.toString();
+    final String factTable = s.getQuery().getFactTable();
+    final String statTable =
+        String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
+    if (!this.checkTableExists(statTable)) {
+      System.out.println("Stat table does not exist: " + statTable);
+      return;
+    }
+
+    final List<String> factTableColumns = this.getColumns(factTable);
+    final SortedSet<String> sampleColumns = s.getColumns();
+    final List<String> sampleColumnsWithFactPrefix = new ArrayList<>();
+    final List<String> joinColumns = new ArrayList<>();
+    for (final String column : sampleColumns) {
+      sampleColumnsWithFactPrefix.add(String.format("fact.%s", column));
+      joinColumns.add(String.format("fact.%s = stat.%s", column, column));
+    }
+
+    final String sampleQCSClause = Joiner.on(",").join(sampleColumnsWithFactPrefix);
+    final String joinClause = Joiner.on(" AND ").join(joinColumns);
+
+    final String createSql =
+        String.format(
+            "CREATE TABLE %s.%s LIKE %s.%s STORED as parquet",
+            database, sampleTable, database, factTable);
+
+    this.conn.createStatement().execute(createSql);
+
+    final String insertSql =
+        String.format(
+            "INSERT OVERWRITE TABLE %s.%s SELECT %s FROM "
+                + "(SELECT fact.*, row_number() OVER (PARTITION BY %s ORDER BY %s) as rownum, "
+                + "count(*) OVER (PARTITION BY %s ORDER BY %s) as groupsize, "
+                + "stat.target_group_sample_size as target_group_sample_size "
+                + "FROM %s as fact, %s as stat "
+                + "WHERE %s ORDER BY rand()) tmp "
+                + "WHERE tmp.rownum <= tmp.target_group_sample_size OR "
+                + "(tmp.rownum > tmp.target_group_sample_size AND "
+                + "rand(unix_timestamp()) < (tmp.target_group_sample_size / 20) / tmp.groupsize)",
+            database,
+            sampleTable,
+            Joiner.on(",").join(factTableColumns),
+            sampleQCSClause,
+            sampleQCSClause,
+            sampleQCSClause,
+            sampleQCSClause,
+            factTable,
+            statTable,
+            joinClause);
+    System.err.println(String.format("Executing: %s", insertSql));
+
+    this.conn.createStatement().execute(insertSql);
+  }
+
+  private void createUniformSample(String database, Sample s) throws SQLException {
+    final String sampleTable = s.toString();
+    final String factTable = s.getQuery().getFactTable();
+    final List<String> factTableColumns = this.getColumns(factTable);
+    final String createSql =
+        String.format(
+            "CREATE TABLE %s.%s LIKE %s.%s STORED as parquet",
+            database, sampleTable, database, factTable);
+
+    conn.createStatement().execute(createSql);
+
+    String insertSql =
+        String.format(
+            "INSERT OVERWRITE TABLE %s.%s SELECT %s FROM %s WHERE rand(unix_timestamp()) < %f",
+            database, sampleTable, Joiner.on(",").join(factTableColumns), s.getRatio());
+
+    System.err.println(String.format("Executing: %s", insertSql));
+  }
+
+  public void findOrCreateJoinTable(final Query q) {
 
     if (q.getJoinedTables().isEmpty()) {
       return;
     }
 
-    String joinTable = this.findJoinTable(q);
+    final String joinTable = this.findJoinTable(q);
     if (joinTable != null) {
       System.out.println("Found join table: " + joinTable);
       q.setJoinTableName(joinTable);
       return;
     }
 
-    Joiner j = Joiner.on("_");
-    Joiner j2 = Joiner.on(",");
-    Joiner j3 = Joiner.on(" AND ");
+    final Joiner j = Joiner.on("_");
+    final Joiner j2 = Joiner.on(",");
+    final Joiner j3 = Joiner.on(" AND ");
 
-    String joinTableName = q.getJoinTableName();
-    String joinTables = j2.join(q.getJoinedTables());
+    final String joinTableName = q.getJoinTableName();
+    final String joinTables = j2.join(q.getJoinedTables());
 
-    List<String> joinColumns = new ArrayList<>();
-    for (Pair<String, String> pair : q.getJoinColumns()) {
+    final List<String> joinColumns = new ArrayList<>();
+    for (final Pair<String, String> pair : q.getJoinColumns()) {
       joinColumns.add(pair.getLeft() + " = " + pair.getRight());
     }
-    String joinClause = j3.join(joinColumns);
+    final String joinClause = j3.join(joinColumns);
 
     try {
-      if (!checkTableExists(joinTableName)) {
+      if (!this.checkTableExists(joinTableName)) {
         System.out.println("Creating join table: " + joinTableName);
-        String sql =
+        final String sql =
             String.format(
                 "CREATE TABLE %s STORED AS parquet AS SELECT * FROM %s WHERE %s",
                 joinTableName, joinTables, joinClause);
-        conn.createStatement().execute(sql);
+        this.conn.createStatement().execute(sql);
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       e.printStackTrace();
     }
   }
 
-  public void createPrejoinTable(Prejoin p) {
+  public void createPrejoinTable(final Prejoin p) {
 
-    String database = p.getDatabase();
-    String joinTableName = p.getName();
-    Joiner j2 = Joiner.on(",");
-    Joiner j3 = Joiner.on(" AND ");
+    final String database = p.getDatabase();
+    final String joinTableName = p.getName();
+    final Joiner j2 = Joiner.on(",");
+    final Joiner j3 = Joiner.on(" AND ");
 
-    String joinTables = j2.join(p.getTableSet());
+    final String joinTables = j2.join(p.getTableSet());
 
-    List<String> joinColumns = new ArrayList<>();
-    for (Pair<String, String> pair : p.getJoinColumnSet()) {
+    final List<String> joinColumns = new ArrayList<>();
+    for (final Pair<String, String> pair : p.getJoinColumnSet()) {
       joinColumns.add(pair.getLeft() + " = " + pair.getRight());
     }
-    String joinClause = j3.join(joinColumns);
+    final String joinClause = j3.join(joinColumns);
 
     try {
-      if (!checkTableExists(joinTableName)) {
-        String sql =
+      if (!this.checkTableExists(joinTableName)) {
+        final String sql =
             String.format(
                 "CREATE TABLE %s.%s STORED AS parquet AS SELECT * FROM %s WHERE %s",
                 database, joinTableName, joinTables, joinClause);
         System.out.println("Creating join table:\n\t" + sql);
-        conn.createStatement().execute(sql);
+        this.conn.createStatement().execute(sql);
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       e.printStackTrace();
     }
   }
 
-  private String findJoinTable(Query q) {
+  private String findJoinTable(final Query q) {
     try {
-      ResultSet rs = conn.createStatement().executeQuery("SHOW TABLES");
+      final ResultSet rs = this.conn.createStatement().executeQuery("SHOW TABLES");
       while (rs.next()) {
-        String table = rs.getString(1);
-        String tab = q.getJoinTableName();
+        final String table = rs.getString(1);
+        final String tab = q.getJoinTableName();
         if (table.toLowerCase().equals(tab.toLowerCase())) {
           return table;
         }
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       e.printStackTrace();
     }
     return null;
   }
 
-  public List<String> getColumns(String table) {
-    List<String> columns = new ArrayList<>();
+  public List<String> getColumns(final String table) {
+    final List<String> columns = new ArrayList<>();
     try {
-      ResultSet rs = conn.createStatement().executeQuery(String.format("DESCRIBE %s", table));
+      final ResultSet rs =
+          this.conn.createStatement().executeQuery(String.format("DESCRIBE %s", table));
       while (rs.next()) {
         columns.add(rs.getString(1));
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       e.printStackTrace();
     }
     return columns;
   }
 
-  public Stat getGroupCountAndSize(String database, Query q, List<Prejoin> prejoins) {
+  public Stat getGroupCountAndSize(
+      final String database, final Query q, final List<Prejoin> prejoins) {
     long populationSize = 0;
     long groupCount = 0;
     double avgGroupSize = 0;
@@ -145,7 +246,7 @@ public class DatabaseTool {
     if (q.getJoinedTables().size() == 1) {
       joinTableName = q.getFactTable();
     } else {
-      for (Prejoin prejoin : prejoins) {
+      for (final Prejoin prejoin : prejoins) {
         if (prejoin.supports(database, q)) {
           joinTableName = prejoin.getName();
           break;
@@ -158,29 +259,32 @@ public class DatabaseTool {
     }
 
     Stat stat = null;
-    String statTableName = String.format("q%s__%.4f__%.4f", q.getId(), Z, E);
+    String statTableName =
+        String.format("q%s__%.4f__%.4f", q.getId(), DatabaseTool.Z, DatabaseTool.E);
     statTableName = statTableName.replaceAll("\\.", "_");
-    if (cache.loadStat(database, statTableName) != null) {
-      stat = cache.loadStat(database, statTableName);
-    } else if (cache.loadStat(database + "__" + q.getUniqueName()) != null) {
-      stat = cache.loadStat(database + "__" + q.getUniqueName());
+    if (this.cache.loadStat(database, statTableName) != null) {
+      stat = this.cache.loadStat(database, statTableName);
+    } else if (this.cache.loadStat(database + "__" + q.getUniqueName()) != null) {
+      stat = this.cache.loadStat(database + "__" + q.getUniqueName());
     }
-    String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
+    final String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
     if (stat != null && stat.getPopulationSize() == 0) {
       stat = null;
     }
 
     try {
-      if (!checkTableExists(statTableName)) {
+      if (!this.checkTableExists(statTableName)) {
         if (stat != null) {
-          conn.createStatement()
+          this.conn
+              .createStatement()
               .execute(
                   String.format(
                       "CREATE TABLE %s STORED AS parquet AS SELECT * FROM %s",
                       statTableName, stat.getTableName()));
         } else {
-          conn.createStatement()
+          this.conn
+              .createStatement()
               .execute(
                   String.format(
                       "CREATE TABLE %s STORED AS parquet AS SELECT %s, groupsize,"
@@ -188,13 +292,22 @@ public class DatabaseTool {
                           + "FROM "
                           + "(SELECT %s,"
                           + "count(*) as groupsize from %s GROUP BY %s) t",
-                      statTableName, qcsCols, Z, E, Z, E, qcsCols, joinTableName, qcsCols));
+                      statTableName,
+                      qcsCols,
+                      DatabaseTool.Z,
+                      DatabaseTool.E,
+                      DatabaseTool.Z,
+                      DatabaseTool.E,
+                      qcsCols,
+                      joinTableName,
+                      qcsCols));
         }
       }
 
       if (stat == null) {
-        ResultSet rs =
-            conn.createStatement()
+        final ResultSet rs =
+            this.conn
+                .createStatement()
                 .executeQuery(
                     String.format(
                         "SELECT count(*) as group_count, sum(groupsize) as population_size, "
@@ -226,11 +339,11 @@ public class DatabaseTool {
                 minGroupSize,
                 maxGroupSize);
       }
-    } catch (SQLException e) {
+    } catch (final SQLException e) {
       e.printStackTrace();
     }
 
-    cache.saveStat(database, statTableName, stat);
+    this.cache.saveStat(database, statTableName, stat);
     return stat;
   }
 }
