@@ -4,8 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.Serializable;
 import java.util.List;
@@ -122,15 +120,15 @@ public class Prejoin implements Serializable {
       return false;
     }
 
-    SortedSet<Pair<String, String>> queryJoinColumnPairs = new TreeSet<>();
-    for (Pair<String, String> pair : q.getJoinColumns()) {
-      Pair<String, String> joinColumnPair;
+    SortedSet<ColumnPair> queryJoinColumnPairs = new TreeSet<>();
+    for (ColumnPair pair : q.getJoinColumns()) {
+      ColumnPair joinColumnPair;
       String left = pair.getLeft();
       String right = pair.getRight();
       if (left.compareTo(right) < 0) {
-        joinColumnPair = ImmutablePair.of(left, right);
+        joinColumnPair = new ColumnPair(left, right);
       } else {
-        joinColumnPair = ImmutablePair.of(right, left);
+        joinColumnPair = new ColumnPair(right, left);
       }
       queryJoinColumnPairs.add(joinColumnPair);
     }

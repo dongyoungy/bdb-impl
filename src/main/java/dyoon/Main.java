@@ -104,7 +104,7 @@ public class Main {
           for (String table : q.getJoinedTables()) {
             p.addTable(table);
           }
-          for (Pair<String, String> pair : q.getJoinColumns()) {
+          for (ColumnPair pair : q.getJoinColumns()) {
             p.addJoinColumnPair(pair.getLeft(), pair.getRight());
           }
           prejoinQueue.add(p);

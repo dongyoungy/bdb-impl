@@ -6,6 +6,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -21,7 +22,7 @@ public class Query implements Serializable {
   private String query = "";
   private TreeSet<String> queryColumnSet;
   private TreeSet<String> joinedTables;
-  private HashSet<Pair<String, String>> joinColumns;
+  private HashSet<ColumnPair> joinColumns;
 
   public static final String[] FACT_TABLES = {
     "store_sales",
@@ -41,7 +42,12 @@ public class Query implements Serializable {
     this.id = id;
     this.queryColumnSet = new TreeSet<>(queryColumns);
     this.joinedTables = new TreeSet<>(joinedTables);
-    this.joinColumns = new HashSet<>(joinColumns);
+    List<ColumnPair> newList = new ArrayList<>();
+    for (Pair<String, String> pair : joinColumns) {
+      newList.add(new ColumnPair(pair.getLeft(), pair.getRight()));
+    }
+
+    this.joinColumns = new HashSet<>(newList);
     this.joinTableName = Joiner.on("_").join(this.joinedTables);
   }
 
@@ -65,7 +71,7 @@ public class Query implements Serializable {
     return Joiner.on("_").join(queryColumnSet);
   }
 
-  public Set<Pair<String, String>> getJoinColumns() {
+  public Set<ColumnPair> getJoinColumns() {
     return joinColumns;
   }
 
