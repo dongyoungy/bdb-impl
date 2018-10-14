@@ -74,13 +74,13 @@ public class Main {
     }
 
     // for test
-    List<Query> testQueries = new ArrayList<>();
-    for (Query query : queries) {
-      if (query.getId().equals("59_nj")) {
-        testQueries.add(query);
-      }
-    }
-    queries = testQueries;
+    //    List<Query> testQueries = new ArrayList<>();
+    //    for (Query query : queries) {
+    //      if (query.getId().equals("59_nj")) {
+    //        testQueries.add(query);
+    //      }
+    //    }
+    //    queries = testQueries;
 
     try {
       Class.forName("com.cloudera.impala.jdbc41.Driver");
@@ -208,6 +208,8 @@ public class Main {
     } catch (ClassNotFoundException e) {
       e.printStackTrace();
     }
+
+    System.exit(0);
   }
 
   private static void loadPrejoinFile(DatabaseTool tool, String loadPrejoinFile)

@@ -160,7 +160,7 @@ public class Meta {
             META_NAME);
     try {
       ResultSet rs = conn.createStatement().executeQuery(sql);
-      if (rs.next()) {
+      while (rs.next()) {
         String key = rs.getString("key");
         String json = rs.getString("value");
         if (key.startsWith(Prejoin.PREJOIN_PREFIX + database)) {
