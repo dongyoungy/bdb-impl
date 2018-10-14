@@ -89,4 +89,13 @@ public class Query implements Serializable {
     }
     return null;
   }
+
+  public static String getFactTable(List<String> tables) {
+    for (String table : tables) {
+      if (Arrays.asList(FACT_TABLES).contains(table.toLowerCase())) {
+        return table;
+      }
+    }
+    return null;
+  }
 }

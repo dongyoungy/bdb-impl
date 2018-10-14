@@ -1,9 +1,14 @@
 package dyoon;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+
 import java.io.Serializable;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Stat implements Serializable {
+  private static final long serialVersionUID = -3632026553748114474L;
   private String id;
   private String tableName;
   private long groupCount;
@@ -12,6 +17,8 @@ public class Stat implements Serializable {
   private long populationSize;
   private long maxGroupSize;
   private long minGroupSize;
+
+  public Stat() {}
 
   public Stat(
       String database,
@@ -31,6 +38,16 @@ public class Stat implements Serializable {
     this.avgGroupSize = avgGroupSize;
     this.minGroupSize = minGroupSize;
     this.maxGroupSize = maxGroupSize;
+  }
+
+  public String toJSONString() {
+    ObjectWriter ow = new ObjectMapper().writer().withDefaultPrettyPrinter();
+    try {
+      return ow.writeValueAsString(this).replaceAll("\\n", "");
+    } catch (JsonProcessingException e) {
+      e.printStackTrace();
+    }
+    return null;
   }
 
   public String getId() {

@@ -1,10 +1,14 @@
 package dyoon;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -12,12 +16,31 @@ import java.util.TreeSet;
 public class Prejoin implements Serializable {
 
   public static final String PREJOIN_PREFIX = "prejoin_";
+  private static final long serialVersionUID = 1879156031101377881L;
 
   private String name;
   private String database;
   private String factTableName;
-  private SortedSet<String> tableSet;
-  private SortedSet<Pair<String, String>> joinColumnSet;
+  private TreeSet<String> tableSet;
+  private TreeSet<ColumnPair> joinColumnSet;
+
+  public Prejoin() {
+    this.tableSet = new TreeSet<>();
+    this.joinColumnSet = new TreeSet<>();
+  }
+
+  public Prejoin(
+      String name,
+      String database,
+      String factTableName,
+      List<String> tableList,
+      List<ColumnPair> joinColumnList) {
+    this.name = name;
+    this.database = database;
+    this.factTableName = factTableName;
+    this.tableSet = new TreeSet<>(tableList);
+    this.joinColumnSet = new TreeSet<>(joinColumnList);
+  }
 
   public Prejoin(String database, String factTableName) {
     this.database = database;
@@ -25,6 +48,16 @@ public class Prejoin implements Serializable {
     this.factTableName = factTableName;
     this.tableSet = new TreeSet<>();
     this.joinColumnSet = new TreeSet<>();
+  }
+
+  public String toJSONString() {
+    ObjectWriter ow = new ObjectMapper().writer().withDefaultPrettyPrinter();
+    try {
+      return ow.writeValueAsString(this).replaceAll("\\n", "");
+    } catch (JsonProcessingException e) {
+      e.printStackTrace();
+    }
+    return null;
   }
 
   public String getName() {
@@ -48,11 +81,11 @@ public class Prejoin implements Serializable {
   }
 
   public void addJoinColumnPair(String left, String right) {
-    Pair<String, String> joinColumnPair;
+    ColumnPair joinColumnPair;
     if (left.compareTo(right) < 0) {
-      joinColumnPair = ImmutablePair.of(left, right);
+      joinColumnPair = new ColumnPair(left, right);
     } else {
-      joinColumnPair = ImmutablePair.of(right, left);
+      joinColumnPair = new ColumnPair(right, left);
     }
     this.joinColumnSet.add(joinColumnPair);
   }
@@ -61,16 +94,8 @@ public class Prejoin implements Serializable {
     return tableSet;
   }
 
-  public void setTableSet(SortedSet<String> tableSet) {
-    this.tableSet = tableSet;
-  }
-
-  public SortedSet<Pair<String, String>> getJoinColumnSet() {
+  public SortedSet<ColumnPair> getJoinColumnSet() {
     return joinColumnSet;
-  }
-
-  public void setJoinColumnSet(SortedSet<Pair<String, String>> joinColumnSet) {
-    this.joinColumnSet = joinColumnSet;
   }
 
   public boolean contains(Prejoin p) {

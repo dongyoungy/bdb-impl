@@ -14,14 +14,14 @@ import java.util.SortedSet;
 /** Created by Dong Young Yoon on 10/9/18. */
 public class DatabaseTool {
   private final Connection conn;
-  private final Cache cache;
+  private final Meta meta;
 
   private static final double Z = 2.576; // 99% CI
   private static final double E = 0.01; // 1% error
 
   public DatabaseTool(final Connection conn) {
     this.conn = conn;
-    this.cache = Cache.getInstance();
+    this.meta = Meta.getInstance(conn);
   }
 
   public boolean checkTableExists(final String table) throws SQLException {
@@ -30,10 +30,20 @@ public class DatabaseTool {
     return tables.next();
   }
 
+  public boolean checkTableExists(String database, String table) throws SQLException {
+    final DatabaseMetaData dbm = this.conn.getMetaData();
+    final ResultSet tables = dbm.getTables(null, database, table, null);
+    return tables.next();
+  }
+
   public boolean checkTableExists(final Prejoin table) throws SQLException {
     final DatabaseMetaData dbm = this.conn.getMetaData();
     final ResultSet tables = dbm.getTables(null, table.getDatabase(), table.getName(), null);
     return tables.next();
+  }
+
+  public void addPrejoin(Prejoin p) {
+    this.meta.addPrejoin(p);
   }
 
   public void createSample(final String database, final Sample s) {
@@ -54,7 +64,7 @@ public class DatabaseTool {
         System.out.println("Unsupported sample type: " + s.toString());
         return;
       }
-      cache.addSample(s);
+      meta.addSample(s);
     } catch (final SQLException e) {
       e.printStackTrace();
     }
@@ -63,11 +73,21 @@ public class DatabaseTool {
   private void createStratifiedSample(final String database, final Sample s) throws SQLException {
     final String sampleTable = s.toString();
     final String factTable = s.getQuery().getFactTable();
+    String sourceTable = factTable;
     String statTable = String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
     statTable = statTable.replaceAll("\\.", "_");
     if (!this.checkTableExists(statTable)) {
       System.out.println("Stat table does not exist: " + statTable);
       return;
+    }
+
+    if (s.getJoinTables().size() > 1) {
+      Prejoin p = meta.getPrejoinForSample(database, s);
+      if (p == null) {
+        System.out.println("Prejoin required for sample does not exist: " + s.toString());
+      } else {
+        sourceTable = p.getName();
+      }
     }
 
     final List<String> factTableColumns = this.getColumns(factTable);
@@ -107,7 +127,7 @@ public class DatabaseTool {
             sampleQCSClause,
             sampleQCSClause,
             sampleQCSClause,
-            factTable,
+            sourceTable,
             statTable,
             joinClause);
     System.err.println(String.format("Executing: %s", insertSql));
@@ -184,7 +204,7 @@ public class DatabaseTool {
     final String joinTables = j2.join(p.getTableSet());
 
     final List<String> joinColumns = new ArrayList<>();
-    for (final Pair<String, String> pair : p.getJoinColumnSet()) {
+    for (ColumnPair pair : p.getJoinColumnSet()) {
       joinColumns.add(pair.getLeft() + " = " + pair.getRight());
     }
     final String joinClause = j3.join(joinColumns);
@@ -258,15 +278,10 @@ public class DatabaseTool {
       return null;
     }
 
-    Stat stat = null;
     String statTableName =
         String.format("q%s__%.4f__%.4f", q.getId(), DatabaseTool.Z, DatabaseTool.E);
     statTableName = statTableName.replaceAll("\\.", "_");
-    if (this.cache.loadStat(database, statTableName) != null) {
-      stat = this.cache.loadStat(database, statTableName);
-    } else if (this.cache.loadStat(database + "__" + q.getUniqueName()) != null) {
-      stat = this.cache.loadStat(database + "__" + q.getUniqueName());
-    }
+    Stat stat = this.meta.loadStat(database, statTableName);
     final String qcsCols = Joiner.on(",").join(q.getQueryColumnSet());
 
     if (stat != null && stat.getPopulationSize() == 0) {
@@ -343,7 +358,12 @@ public class DatabaseTool {
       e.printStackTrace();
     }
 
-    this.cache.saveStat(database, statTableName, stat);
+    Stat s = meta.loadStat(database, statTableName);
+
+    if (s == null) {
+      this.meta.saveStat(database, statTableName, stat);
+    }
+
     return stat;
   }
 }

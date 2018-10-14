@@ -2,15 +2,17 @@ package dyoon;
 
 import com.beust.jcommander.Parameter;
 
-/**
- * Created by Dong Young Yoon on 10/14/18.
- */
+/** Created by Dong Young Yoon on 10/14/18. */
 public class Args {
 
-  @Parameter(names = {"-d", "--database"},  description = "database/schema")
+  @Parameter(
+      names = {"-d", "--database"},
+      description = "database/schema")
   private String database = "tpcds_500_parquet";
 
-  @Parameter(names = {"-h", "--host"}, description = "host")
+  @Parameter(
+      names = {"-h", "--host"},
+      description = "host")
   private String host = "c220g5-110408.wisc.cloudlab.us:21050";
 
   @Parameter(names = "--create", description = "Create samples at the end")
@@ -18,6 +20,9 @@ public class Args {
 
   @Parameter(names = "--prejoin", description = "Use prejoins")
   private boolean prejoin = false;
+
+  @Parameter(names = "--load-prejoin-file", description = "Load prejoin meta from file")
+  private String loadPrejoinFile = "";
 
   @Parameter(names = "--help", help = true)
   private boolean help = false;
@@ -41,5 +46,8 @@ public class Args {
   public boolean isHelp() {
     return help;
   }
-}
 
+  public String getLoadPrejoinFile() {
+    return loadPrejoinFile;
+  }
+}

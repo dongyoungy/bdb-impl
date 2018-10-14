@@ -5,6 +5,10 @@ import com.beust.jcommander.ParameterException;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -16,8 +20,8 @@ import java.util.PriorityQueue;
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Main {
 
-  //  private static String DATABASE;
-  //  private static String HOST;
+  private static String database;
+  private static String host;
 
   private static final long UNIFORM_THRESHOLD = 100000;
   private static final double MIN_IO_REDUCTION_RATIO = (2.0 / 3.0);
@@ -37,13 +41,30 @@ public class Main {
       return;
     }
 
-    if (args.isHelp() || argv.length == 0) {
+    if (args.isHelp()) {
       jc.usage();
       return;
     }
 
-    String database = args.getDatabase();
-    String host = args.getHost();
+    database = args.getDatabase();
+    host = args.getHost();
+
+    if (!args.getLoadPrejoinFile().isEmpty()) {
+      try {
+        Class.forName("com.cloudera.impala.jdbc41.Driver");
+        String connectionStr = String.format("jdbc:impala://%s/%s", host, database);
+        Connection conn = DriverManager.getConnection(connectionStr, "", "");
+        DatabaseTool tool = new DatabaseTool(conn);
+        loadPrejoinFile(tool, args.getLoadPrejoinFile());
+        return;
+      } catch (IOException e) {
+        e.printStackTrace();
+      } catch (ClassNotFoundException e) {
+        e.printStackTrace();
+      } catch (SQLException e) {
+        e.printStackTrace();
+      }
+    }
 
     Connection conn = null;
     if (args.isPrejoin()) {
@@ -52,19 +73,28 @@ public class Main {
       setQueriesWithoutPrejoin();
     }
 
+    // for test
+    List<Query> testQueries = new ArrayList<>();
+    for (Query query : queries) {
+      if (query.getId().equals("59_nj")) {
+        testQueries.add(query);
+      }
+    }
+    queries = testQueries;
+
     try {
       Class.forName("com.cloudera.impala.jdbc41.Driver");
       String connectionStr = String.format("jdbc:impala://%s/%s", host, database);
       conn = DriverManager.getConnection(connectionStr, "", "");
       DatabaseTool tool = new DatabaseTool(conn);
 
-      Cache cache = Cache.getInstance();
-      List<Prejoin> prejoinList = cache.getPrejoins(database);
+      Meta meta = Meta.getInstance(conn);
+      List<Prejoin> prejoinList = meta.getPrejoins(database);
       PriorityQueue<Prejoin> prejoinQueue = new PriorityQueue<>(100, new PrejoinSizeComparator());
 
       for (Prejoin prejoin : prejoinList) {
         if (!tool.checkTableExists(prejoin)) {
-          cache.removePrejoin(prejoin);
+          meta.removePrejoin(prejoin);
         }
       }
 
@@ -93,7 +123,7 @@ public class Main {
 
         if (!exists) {
           tool.createPrejoinTable(p);
-          cache.addPrejoin(p);
+          meta.addPrejoin(p);
           prejoinList.add(p);
         }
       }
@@ -133,7 +163,13 @@ public class Main {
                 String.format(
                     "Create %f %% uniform sample on %s.",
                     (UNIFORM_THRESHOLD / avgGroupSize) * 100, q.getFactTable()));
-            Sample s = new Sample(q, Sample.Type.UNIFORM, q.getFactTable(), q.getQueryColumnSet());
+            Sample s =
+                new Sample(
+                    q,
+                    Sample.Type.UNIFORM,
+                    q.getFactTable(),
+                    q.getJoinedTables(),
+                    q.getQueryColumnSet());
             s.setRatio(ratio);
             samplesToCreate.add(s);
           }
@@ -145,7 +181,12 @@ public class Main {
                     "Create stratified sample on %s with (%s) for estimated sample size of %.2f %%.",
                     q.getFactTable(), q.getQCSString(), ratio * 100));
             Sample s =
-                new Sample(q, Sample.Type.STRATIFIED, q.getFactTable(), q.getQueryColumnSet());
+                new Sample(
+                    q,
+                    Sample.Type.STRATIFIED,
+                    q.getFactTable(),
+                    q.getJoinedTables(),
+                    q.getQueryColumnSet());
             s.setE(E);
             s.setZ(Z);
             samplesToCreate.add(s);
@@ -166,6 +207,37 @@ public class Main {
       e.printStackTrace();
     } catch (ClassNotFoundException e) {
       e.printStackTrace();
+    }
+  }
+
+  private static void loadPrejoinFile(DatabaseTool tool, String loadPrejoinFile)
+      throws IOException, SQLException {
+    File file = new File(loadPrejoinFile);
+
+    BufferedReader br = new BufferedReader(new FileReader(file));
+
+    String line;
+    while ((line = br.readLine()) != null) {
+      String[] tokens = line.split(";");
+      String database = tokens[0];
+      String name = tokens[1];
+      String tables = tokens[2];
+      String joinClause = tokens[3];
+      List<String> tableList = Arrays.asList(tables.split(","));
+      List<ColumnPair> joinColumnList = new ArrayList<>();
+      String factTable = Query.getFactTable(tableList);
+      if (factTable == null) continue;
+
+      String[] joinPairs = joinClause.split(" AND ");
+      for (String pair : joinPairs) {
+        String[] p = pair.split(" = ");
+        joinColumnList.add(new ColumnPair(p[0].trim(), p[1].trim()));
+      }
+
+      Prejoin prejoin = new Prejoin(name, database, factTable, tableList, joinColumnList);
+      if (tool.checkTableExists(prejoin)) {
+        tool.addPrejoin(prejoin);
+      }
     }
   }
 

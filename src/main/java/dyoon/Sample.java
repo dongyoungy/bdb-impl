@@ -1,5 +1,8 @@
 package dyoon;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.common.base.Joiner;
 
 import java.io.Serializable;
@@ -18,6 +21,7 @@ public class Sample implements Serializable {
 
   private Query query;
   private String table;
+  private TreeSet<String> joinTables;
   private TreeSet<String> columns;
   private Type type;
 
@@ -26,10 +30,13 @@ public class Sample implements Serializable {
   private double Z;
   private double E;
 
-  public Sample(Query query, Type type, String table, Set<String> columns) {
+  public Sample() {}
+
+  public Sample(Query query, Type type, String table, Set<String> joinTables, Set<String> columns) {
     this.query = query;
     this.type = type;
     this.table = table;
+    this.joinTables = new TreeSet<>(joinTables);
     this.columns = new TreeSet<>(columns);
   }
 
@@ -37,13 +44,23 @@ public class Sample implements Serializable {
   public String toString() {
     String t = "";
     if (type == Type.UNIFORM) {
-      t = String.format("uf_%.2f", ratio);
+      t = String.format("uf_%.2f", ratio).replaceAll("\\.", "_");
     } else if (type == Type.STRATIFIED) {
-      t = String.format("st_%.4f_%.4f", Z, E);
+      t = String.format("st_%.4f_%.4f", Z, E).replaceAll("\\.", "_");
     } else {
       t = "unknown";
     }
     return query.getFactTable() + "__" + t + "__" + getColumnString();
+  }
+
+  public String toJSONString() {
+    ObjectWriter ow = new ObjectMapper().writer().withDefaultPrettyPrinter();
+    try {
+      return ow.writeValueAsString(this).replaceAll("\\n", "");
+    } catch (JsonProcessingException e) {
+      e.printStackTrace();
+    }
+    return null;
   }
 
   public Query getQuery() {
@@ -52,6 +69,10 @@ public class Sample implements Serializable {
 
   public String getTable() {
     return table;
+  }
+
+  public SortedSet<String> getJoinTables() {
+    return joinTables;
   }
 
   public SortedSet<String> getColumns() {
