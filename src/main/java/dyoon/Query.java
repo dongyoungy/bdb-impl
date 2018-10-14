@@ -3,6 +3,7 @@ package dyoon;
 import com.google.common.base.Joiner;
 import org.apache.commons.lang3.tuple.Pair;
 
+import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.Arrays;
@@ -13,7 +14,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 /** Created by Dong Young Yoon on 10/9/18. */
-public class Query {
+public class Query implements Serializable {
+  private static final long serialVersionUID = 5426329759219434198L;
   private String id;
   private String joinTableName;
   private String query = "";
