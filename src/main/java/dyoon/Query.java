@@ -1,11 +1,10 @@
 package dyoon;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.common.base.Joiner;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.Serializable;
-import java.sql.Connection;
-import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -15,14 +14,18 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 /** Created by Dong Young Yoon on 10/9/18. */
-public class Query implements Serializable {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class Query implements Serializable, Comparable<Query> {
   private static final long serialVersionUID = 5426329759219434198L;
   private String id;
   private String joinTableName;
   private String query = "";
+  private String sampleQuery = "";
   private TreeSet<String> queryColumnSet;
   private TreeSet<String> joinedTables;
   private HashSet<ColumnPair> joinColumns;
+  private TreeSet<String> groupByColumns;
+  private TreeSet<String> aggColumns;
 
   public static final String[] FACT_TABLES = {
     "store_sales",
@@ -33,6 +36,13 @@ public class Query implements Serializable {
     "web_returns",
     "inventory"
   };
+
+  public Query() {}
+
+  public Query(String id, String query) {
+    this.id = id;
+    this.query = query;
+  }
 
   public Query(
       String id,
@@ -49,6 +59,17 @@ public class Query implements Serializable {
 
     this.joinColumns = new HashSet<>(newList);
     this.joinTableName = Joiner.on("_").join(this.joinedTables);
+  }
+
+  @Override
+  public int hashCode() {
+    return id.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    Query other = (Query) obj;
+    return id.equals(other.getId());
   }
 
   public String getJoinTableName() {
@@ -75,8 +96,8 @@ public class Query implements Serializable {
     return joinColumns;
   }
 
-  public ResultSet runQuery(Connection conn) {
-    return null;
+  public String getQuery() {
+    return query;
   }
 
   public String getId() {
@@ -85,6 +106,18 @@ public class Query implements Serializable {
 
   public String getUniqueName() {
     return Joiner.on("_").join(joinedTables) + "__" + getQCSString();
+  }
+
+  public void setQuery(String query) {
+    this.query = query;
+  }
+
+  public void setGroupByColumns(List<String> groupByColumns) {
+    this.groupByColumns = new TreeSet<>(groupByColumns);
+  }
+
+  public void setAggColumns(List<String> aggColumns) {
+    this.aggColumns = new TreeSet<>(aggColumns);
   }
 
   public String getFactTable() {
@@ -103,5 +136,26 @@ public class Query implements Serializable {
       }
     }
     return null;
+  }
+
+  public TreeSet<String> getGroupByColumns() {
+    return groupByColumns;
+  }
+
+  public TreeSet<String> getAggColumns() {
+    return aggColumns;
+  }
+
+  public String getSampleQuery() {
+    return sampleQuery;
+  }
+
+  public void setSampleQuery(String sampleQuery) {
+    this.sampleQuery = sampleQuery;
+  }
+
+  @Override
+  public int compareTo(Query o) {
+    return this.getId().compareTo(o.getId());
   }
 }

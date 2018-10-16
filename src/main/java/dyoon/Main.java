@@ -14,8 +14,10 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class Main {
@@ -49,45 +51,131 @@ public class Main {
     database = args.getDatabase();
     host = args.getHost();
 
-    if (!args.getLoadPrejoinFile().isEmpty()) {
-      try {
-        Class.forName("com.cloudera.impala.jdbc41.Driver");
-        String connectionStr = String.format("jdbc:impala://%s/%s", host, database);
-        Connection conn = DriverManager.getConnection(connectionStr, "", "");
-        DatabaseTool tool = new DatabaseTool(conn);
-        loadPrejoinFile(tool, args.getLoadPrejoinFile());
-        return;
-      } catch (IOException e) {
-        e.printStackTrace();
-      } catch (ClassNotFoundException e) {
-        e.printStackTrace();
-      } catch (SQLException e) {
-        e.printStackTrace();
-      }
-    }
-
     Connection conn = null;
-    if (args.isPrejoin()) {
-      setQueries();
-    } else {
-      setQueriesWithoutPrejoin();
-    }
-
-    // for test
-    //    List<Query> testQueries = new ArrayList<>();
-    //    for (Query query : queries) {
-    //      if (query.getId().equals("31_1")) {
-    //        testQueries.add(query);
-    //      }
-    //    }
-    //    queries = testQueries;
+    DatabaseTool tool = null;
 
     try {
       Class.forName("com.cloudera.impala.jdbc41.Driver");
       String connectionStr = String.format("jdbc:impala://%s/%s", host, database);
       conn = DriverManager.getConnection(connectionStr, "", "");
-      DatabaseTool tool = new DatabaseTool(conn);
+      tool = new DatabaseTool(conn);
+    } catch (ClassNotFoundException | SQLException e) {
+      e.printStackTrace();
+      return;
+    }
 
+    if (!args.getLoadPrejoinFile().isEmpty()) {
+      try {
+        loadPrejoinFile(tool, args.getLoadPrejoinFile());
+      } catch (IOException | SQLException e) {
+        e.printStackTrace();
+      }
+      System.exit(0);
+    } else if (!args.getCreateSample().isEmpty()) {
+      String type = args.getCreateSample();
+      if (type.equals("st2")) {
+        String sampleTables = args.getSampleTables();
+        String sampleColumns = args.getSampleColumns();
+        List<String> tables = Arrays.asList(sampleTables.split(","));
+        List<String> columns = Arrays.asList(sampleColumns.split(","));
+        String factTable = Query.getFactTable(tables);
+        int minRows = args.getMinRows();
+        Set<String> tableSet = new HashSet(tables);
+        Set<String> columnSet = new HashSet(columns);
+
+        Sample s = new Sample(Sample.Type.STRATIFIED2, factTable, tableSet, columnSet);
+        s.setMinRow(minRows);
+
+        tool.createSample(database, s, args.isOverwrite());
+
+      } else {
+        System.err.println("Unsupported sample type: " + type);
+      }
+      System.exit(0);
+    }
+
+    if (args.isPrejoin()) {
+      setQueries();
+    } else {
+      setQueriesWithoutPrejoin();
+    }
+    //    int count = 0;
+    //    List<String> temp = new ArrayList<>();
+    //    for (Query query : queries) {
+    //      if (query.getId().contains("_")) {
+    //        temp.add(query.getId());
+    //        ++count;
+    //      }
+    //    }
+
+    // for test
+    //    List<Query> testQueries = new ArrayList<>();
+    //    for (Query query : queries) {
+    //      if (query.getId().equals("33_1")) {
+    //        testQueries.add(query);
+    //      }
+    //    }
+    //    queries = testQueries;
+
+    if (args.isTestAllSamples()) {
+      Meta m = Meta.getInstance(conn);
+      List<Sample> samples = m.getSamples();
+      for (Sample sample : samples) {
+        Query queryForSample = sample.getQuery();
+        Query actualQuery = null;
+        for (Query q : queries) {
+          if (q.getId().equals(queryForSample.getId())) {
+            actualQuery = q;
+            break;
+          }
+        }
+
+        if (actualQuery == null) {
+          System.out.println("Query for sample not found: " + queryForSample.getId());
+        } else {
+          try {
+            tool.testSample(sample, actualQuery, args.isMeasureTime(), args.getClearCacheScript());
+          } catch (SQLException e) {
+            e.printStackTrace();
+          }
+        }
+      }
+      System.exit(0);
+    } else if (!args.getTestSample().isEmpty()) {
+      String sampleName = args.getTestSample();
+      Meta m = Meta.getInstance(conn);
+      List<Sample> samples = m.getSamples();
+      Sample sampleToTest = null;
+      for (Sample s : samples) {
+        if (s.toString().equals(sampleName)) {
+          sampleToTest = s;
+          break;
+        }
+      }
+      if (sampleToTest == null) {
+        System.out.println("Sample not found: " + sampleName);
+        System.exit(0);
+      }
+
+      List<String> queryIds = Arrays.asList(args.getTestQueries().split(","));
+      List<Query> queryToTest = new ArrayList<>();
+      for (Query q : queries) {
+        if (queryIds.contains(q.getId())) {
+          queryToTest.add(q);
+        }
+      }
+
+      for (Query q : queryToTest) {
+        try {
+          tool.testSample(sampleToTest, q, args.isMeasureTime(), args.getClearCacheScript());
+        } catch (SQLException e) {
+          e.printStackTrace();
+        }
+      }
+      System.exit(0);
+    }
+
+    try {
       Meta meta = Meta.getInstance(conn);
       List<Prejoin> prejoinList = meta.getPrejoins(database);
       PriorityQueue<Prejoin> prejoinQueue = new PriorityQueue<>(100, new PrejoinSizeComparator());
@@ -131,6 +219,10 @@ public class Main {
       List<Sample> samplesToCreate = new ArrayList<>();
 
       for (Query q : queries) {
+        if (q.getQueryColumnSet().isEmpty()) {
+          // if QCS is empty, skip.
+          continue;
+        }
         Stat groupCountAndSize = tool.getGroupCountAndSize(database, q, prejoinList);
         if (groupCountAndSize == null) {
           System.out.println("Something wrong: stat null. Exiting.");
@@ -204,8 +296,6 @@ public class Main {
       }
 
     } catch (SQLException e) {
-      e.printStackTrace();
-    } catch (ClassNotFoundException e) {
       e.printStackTrace();
     }
 
@@ -463,6 +553,18 @@ public class Main {
             Arrays.asList(q31_1QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q31_1Tables.replaceAll("\\s", "").split(",")),
             q31_1JoinCols);
+    String q31_1AggColumns = "store_sales";
+    q31_1.setAggColumns(Arrays.asList(q31_1AggColumns.replaceAll("\\s", "").split(",")));
+    String q31_1GroupByColumns = "ca_county,d_qoy,d_year";
+    q31_1.setGroupByColumns(Arrays.asList(q31_1GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q31_1Query =
+        "select ca_county,d_qoy, d_year,sum(ss_ext_sales_price) as store_sales,"
+            + "count(*) as groupsize\n"
+            + " from FACT_TABLE as store_sales,date_dim,customer_address\n"
+            + " where ss_sold_date_sk = d_date_sk\n"
+            + "  and ss_addr_sk=ca_address_sk\n"
+            + " group by ca_county,d_qoy, d_year";
+    q31_1.setQuery(q31_1Query);
     queries.add(q31_1);
 
     List<Pair<String, String>> q31_2JoinCols = new ArrayList<>();
@@ -476,6 +578,18 @@ public class Main {
             Arrays.asList(q31_2QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q31_2Tables.replaceAll("\\s", "").split(",")),
             q31_2JoinCols);
+    String q31_2AggColumns = "web_sales";
+    q31_2.setAggColumns(Arrays.asList(q31_2AggColumns.replaceAll("\\s", "").split(",")));
+    String q31_2GroupByColumns = "ca_county,d_qoy,d_year";
+    q31_2.setGroupByColumns(Arrays.asList(q31_2GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q31_2Query =
+        "select ca_county,d_qoy, d_year,sum(ws_ext_sales_price) as web_sales,"
+            + "count(*) as groupsize\n"
+            + " from FACT_TABLE as web_sales,date_dim,customer_address\n"
+            + " where ws_sold_date_sk = d_date_sk\n"
+            + "  and ws_bill_addr_sk=ca_address_sk\n"
+            + " group by ca_county,d_qoy, d_year";
+    q31_2.setQuery(q31_2Query);
     queries.add(q31_2);
 
     List<Pair<String, String>> q32JoinCols = new ArrayList<>();
@@ -503,6 +617,167 @@ public class Main {
             Arrays.asList(q33_1QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q33_1Tables.replaceAll("\\s", "").split(",")),
             q33_1JoinCols);
+    String q33_1AggColumns = "total_sales";
+    q33_1.setAggColumns(Arrays.asList(q33_1AggColumns.replaceAll("\\s", "").split(",")));
+    String q33_1GroupByColumns = "i_manufact_id";
+    q33_1.setGroupByColumns(Arrays.asList(q33_1GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q33_1Query =
+        "with ss as (\n"
+            + " select\n"
+            + "          i_manufact_id,sum(ss_ext_sales_price) total_sales,count(*) gs\n"
+            + " from\n"
+            + " \tFACT_TABLE as store_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     ss_item_sk              = i_item_sk\n"
+            + " and     ss_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     ss_addr_sk              = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6 \n"
+            + " group by i_manufact_id),\n"
+            + " cs as (\n"
+            + " select\n"
+            + "          i_manufact_id,sum(cs_ext_sales_price) total_sales,count(*) gs\n"
+            + " from\n"
+            + " \tcatalog_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id               in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     cs_item_sk              = i_item_sk\n"
+            + " and     cs_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     cs_bill_addr_sk         = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6 \n"
+            + " group by i_manufact_id),\n"
+            + " ws as (\n"
+            + " select\n"
+            + "          i_manufact_id,sum(ws_ext_sales_price) total_sales,count(*) gs\n"
+            + " from\n"
+            + " \tweb_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id               in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     ws_item_sk              = i_item_sk\n"
+            + " and     ws_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     ws_bill_addr_sk         = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6\n"
+            + " group by i_manufact_id)\n"
+            + "  select  i_manufact_id ,sum(total_sales) total_sales, sum(gs) as groupsize\n"
+            + " from  (select * from ss \n"
+            + "        union all\n"
+            + "        select * from cs \n"
+            + "        union all\n"
+            + "        select * from ws) tmp1\n"
+            + " group by i_manufact_id\n"
+            + " order by total_sales";
+    //    String q33_1SampleQuery =
+    //        "with ss as (\n"
+    //            + " select tmp.i_manufact_id, sum(tmp.total_sales) / sum(tmp.samplesize) *
+    // sum(stat.groupsize) as total_sales\n"
+    //            + " from\n"
+    //            + " (\n"
+    //            + " select\n"
+    //            + "          i_manufact_id,ca_gmt_offset,d_year,d_moy,sum(ss_ext_sales_price)
+    // total_sales, count(*) as samplesize\n"
+    //            + " from\n"
+    //            + " \tFACT_TABLE as store_sales,\n"
+    //            + " \tdate_dim,\n"
+    //            + "         customer_address,\n"
+    //            + "         item\n"
+    //            + " where\n"
+    //            + "         i_manufact_id in (select\n"
+    //            + "  i_manufact_id\n"
+    //            + "from\n"
+    //            + " item\n"
+    //            + "where i_category in ('Books'))\n"
+    //            + " and     ss_item_sk              = i_item_sk\n"
+    //            + " and     ss_sold_date_sk         = d_date_sk\n"
+    //            + " and     d_year                  = 1999\n"
+    //            + " and     d_moy                   = 3\n"
+    //            + " and     ss_addr_sk              = ca_address_sk\n"
+    //            + " and     ca_gmt_offset           = -6 \n"
+    //            + " group by i_manufact_id,ca_gmt_offset,d_year,d_moy) tmp, STAT_TABLE stat\n"
+    //            + " where tmp.i_manufact_id = stat.i_manufact_id\n"
+    //            + "and tmp.ca_gmt_offset = stat.ca_gmt_offset\n"
+    //            + "and tmp.d_moy = stat.d_moy\n"
+    //            + "and tmp.d_year = stat.d_year\n"
+    //            + "group by i_manufact_id\n"
+    //            + "),\n"
+    //            + " cs as (\n"
+    //            + " select\n"
+    //            + "          i_manufact_id,sum(cs_ext_sales_price) total_sales\n"
+    //            + " from\n"
+    //            + " \tcatalog_sales,\n"
+    //            + " \tdate_dim,\n"
+    //            + "         customer_address,\n"
+    //            + "         item\n"
+    //            + " where\n"
+    //            + "         i_manufact_id               in (select\n"
+    //            + "  i_manufact_id\n"
+    //            + "from\n"
+    //            + " item\n"
+    //            + "where i_category in ('Books'))\n"
+    //            + " and     cs_item_sk              = i_item_sk\n"
+    //            + " and     cs_sold_date_sk         = d_date_sk\n"
+    //            + " and     d_year                  = 1999\n"
+    //            + " and     d_moy                   = 3\n"
+    //            + " and     cs_bill_addr_sk         = ca_address_sk\n"
+    //            + " and     ca_gmt_offset           = -6 \n"
+    //            + " group by i_manufact_id),\n"
+    //            + " ws as (\n"
+    //            + " select\n"
+    //            + "          i_manufact_id,sum(ws_ext_sales_price) total_sales\n"
+    //            + " from\n"
+    //            + " \tweb_sales,\n"
+    //            + " \tdate_dim,\n"
+    //            + "         customer_address,\n"
+    //            + "         item\n"
+    //            + " where\n"
+    //            + "         i_manufact_id               in (select\n"
+    //            + "  i_manufact_id\n"
+    //            + "from\n"
+    //            + " item\n"
+    //            + "where i_category in ('Books'))\n"
+    //            + " and     ws_item_sk              = i_item_sk\n"
+    //            + " and     ws_sold_date_sk         = d_date_sk\n"
+    //            + " and     d_year                  = 1999\n"
+    //            + " and     d_moy                   = 3\n"
+    //            + " and     ws_bill_addr_sk         = ca_address_sk\n"
+    //            + " and     ca_gmt_offset           = -6\n"
+    //            + " group by i_manufact_id)\n"
+    //            + "  select  i_manufact_id ,sum(total_sales) total_sales, count(*) as groupsize\n"
+    //            + " from  (select * from ss \n"
+    //            + "        union all\n"
+    //            + "        select * from cs \n"
+    //            + "        union all\n"
+    //            + "        select * from ws) tmp1\n"
+    //            + " group by i_manufact_id\n"
+    //            + " order by total_sales";
+    q33_1.setQuery(q33_1Query);
+    //    q33_1.setSampleQuery(q33_1SampleQuery);
     queries.add(q33_1);
 
     List<Pair<String, String>> q33_2JoinCols = new ArrayList<>();
@@ -538,13 +813,39 @@ public class Main {
     q34JoinCols.add(ImmutablePair.of("ss_store_sk", "s_store_sk"));
     q34JoinCols.add(ImmutablePair.of("ss_hdemo_sk", "hd_demo_sk"));
     String q34Tables = "store_sales,date_dim,store,household_demographics";
-    String q34QCS = "d_dom,hd_buy_potential,hd_vehicle_count,d_year,s_county";
+    String q34QCS =
+        "d_dom,hd_buy_potential,hd_vehicle_count,d_year,s_county,ss_ticket_number,ss_customer_sk";
     Query q34 =
         new Query(
             "34",
             Arrays.asList(q34QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q34Tables.replaceAll("\\s", "").split(",")),
             q34JoinCols);
+    String q34AggColumns = "cnt";
+    q34.setAggColumns(Arrays.asList(q34AggColumns.replaceAll("\\s", "").split(",")));
+    String q34GroupByColumns = "ss_ticket_number,ss_customer_sk";
+    q34.setGroupByColumns(Arrays.asList(q34GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q34Query =
+        "select ss_ticket_number\n"
+            + "          ,ss_customer_sk\n"
+            + "          ,count(*) cnt, count(*) as groupsize\n"
+            + "    from FACT_TABLE as store_sales,date_dim,store,household_demographics\n"
+            + "    where store_sales.ss_sold_date_sk = date_dim.d_date_sk\n"
+            + "    and store_sales.ss_store_sk = store.s_store_sk  \n"
+            + "    and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk\n"
+            + "    and (date_dim.d_dom between 1 and 3 or date_dim.d_dom between 25 and 28)\n"
+            + "    and (household_demographics.hd_buy_potential = '1001-5000' or\n"
+            + "         household_demographics.hd_buy_potential = '5001-10000')\n"
+            + "    and household_demographics.hd_vehicle_count > 0\n"
+            + "    and (case when household_demographics.hd_vehicle_count > 0 \n"
+            + "\tthen household_demographics.hd_dep_count/ household_demographics.hd_vehicle_count \n"
+            + "\telse null \n"
+            + "\tend)  > 1.2\n"
+            + "    and date_dim.d_year in (1998,1998+1,1998+2)\n"
+            + "    and store.s_county in ('Fairfield County', 'Williamson County')\n"
+            + "    group by ss_ticket_number,ss_customer_sk";
+    q34.setQuery(q34Query);
+
     queries.add(q34);
 
     List<Pair<String, String>> q39JoinCols = new ArrayList<>();
@@ -572,6 +873,30 @@ public class Main {
             Arrays.asList(q42QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q42Tables.replaceAll("\\s", "").split(",")),
             q42JoinCols);
+    String q42AggColumns = "sum_price";
+    q42.setAggColumns(Arrays.asList(q42AggColumns.replaceAll("\\s", "").split(",")));
+    String q42GroupByColumns = "d_year,i_category_id,i_category";
+    q42.setGroupByColumns(Arrays.asList(q42GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q42Query =
+        "select  dt.d_year as d_year\n"
+            + " \t,item.i_category_id as i_category_id\n"
+            + " \t,item.i_category as i_category\n"
+            + " \t,sum(ss_ext_sales_price) as sum_price, count(*) as groupsize\n"
+            + " from \tdate_dim dt\n"
+            + " \t,FACT_TABLE as store_sales\n"
+            + " \t,item\n"
+            + " where dt.d_date_sk = store_sales.ss_sold_date_sk\n"
+            + " \tand store_sales.ss_item_sk = item.i_item_sk\n"
+            + " \tand item.i_manager_id = 1  \t\n"
+            + " \tand dt.d_moy=12\n"
+            + " \tand dt.d_year=1998\n"
+            + " group by \tdt.d_year\n"
+            + " \t\t,item.i_category_id\n"
+            + " \t\t,item.i_category\n"
+            + " order by       sum(ss_ext_sales_price) desc,dt.d_year\n"
+            + " \t\t,item.i_category_id\n"
+            + " \t\t,item.i_category";
+    q42.setQuery(q42Query);
     queries.add(q42);
 
     List<Pair<String, String>> q43JoinCols = new ArrayList<>();
@@ -585,6 +910,28 @@ public class Main {
             Arrays.asList(q43QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q43Tables.replaceAll("\\s", "").split(",")),
             q43JoinCols);
+    String q43AggColumns = "sun_sales,mon_sales,tue_sales,wed_sales,thu_sales,fri_sales,sat_sales,";
+    q43.setAggColumns(Arrays.asList(q43AggColumns.replaceAll("\\s", "").split(",")));
+    String q43GroupByColumns = "s_store_name,s_store_id";
+    q43.setGroupByColumns(Arrays.asList(q43GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q43Query =
+        "select  s_store_name, s_store_id,\n"
+            + "        sum(case when (d_day_name='Sunday') then ss_sales_price else null end) sun_sales,\n"
+            + "        sum(case when (d_day_name='Monday') then ss_sales_price else null end) mon_sales,\n"
+            + "        sum(case when (d_day_name='Tuesday') then ss_sales_price else  null end) tue_sales,\n"
+            + "        sum(case when (d_day_name='Wednesday') then ss_sales_price else null end) wed_sales,\n"
+            + "        sum(case when (d_day_name='Thursday') then ss_sales_price else null end) thu_sales,\n"
+            + "        sum(case when (d_day_name='Friday') then ss_sales_price else null end) fri_sales,\n"
+            + "        sum(case when (d_day_name='Saturday') then ss_sales_price else null end) sat_sales,\n"
+            + " count(*) as groupsize"
+            + " from date_dim, FACT_TABLE as store_sales, store\n"
+            + " where d_date_sk = ss_sold_date_sk and\n"
+            + "       s_store_sk = ss_store_sk and\n"
+            + "       s_gmt_offset = -6 and\n"
+            + "       d_year = 1998 \n"
+            + " group by s_store_name, s_store_id\n"
+            + " order by s_store_name, s_store_id,sun_sales,mon_sales,tue_sales,wed_sales,thu_sales,fri_sales,sat_sales";
+    q43.setQuery(q43Query);
     queries.add(q43);
 
     List<Pair<String, String>> q46JoinCols = new ArrayList<>();
@@ -936,6 +1283,31 @@ public class Main {
             Arrays.asList(q76_2QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q76_2Tables.replaceAll("\\s", "").split(",")),
             q76_2JoinCols);
+    String q76_2AggColumns = "sales_amt";
+    q76_2.setAggColumns(Arrays.asList(q76_2AggColumns.replaceAll("\\s", "").split(",")));
+    String q76_2GroupByColumns = "channel, col_name, d_year, d_qoy, i_category";
+    q76_2.setGroupByColumns(Arrays.asList(q76_2GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q76_2Query =
+        "select  channel, col_name, d_year, d_qoy, i_category, COUNT(*) sales_cnt, SUM(ext_sales_price) sales_amt, count(*) as groupsize FROM (\n"
+            + "        SELECT 'store' as channel, 'ss_addr_sk' col_name, d_year, d_qoy, i_category, ss_ext_sales_price ext_sales_price\n"
+            + "         FROM store_sales, item, date_dim\n"
+            + "         WHERE ss_addr_sk IS NULL\n"
+            + "           AND ss_sold_date_sk=d_date_sk\n"
+            + "           AND ss_item_sk=i_item_sk\n"
+            + "        UNION ALL\n"
+            + "        SELECT 'web' as channel, 'ws_web_page_sk' col_name, d_year, d_qoy, i_category, ws_ext_sales_price ext_sales_price\n"
+            + "         FROM web_sales, item, date_dim\n"
+            + "         WHERE ws_web_page_sk IS NULL\n"
+            + "           AND ws_sold_date_sk=d_date_sk\n"
+            + "           AND ws_item_sk=i_item_sk\n"
+            + "        UNION ALL\n"
+            + "        SELECT 'catalog' as channel, 'cs_warehouse_sk' col_name, d_year, d_qoy, i_category, cs_ext_sales_price ext_sales_price\n"
+            + "         FROM FACT_TABLE as catalog_sales, item, date_dim\n"
+            + "         WHERE cs_warehouse_sk IS NULL\n"
+            + "           AND cs_sold_date_sk=d_date_sk\n"
+            + "           AND cs_item_sk=i_item_sk) foo\n"
+            + "GROUP BY channel, col_name, d_year, d_qoy, i_category";
+    q76_2.setQuery(q76_2Query);
     queries.add(q76_2);
 
     List<Pair<String, String>> q76_3JoinCols = new ArrayList<>();
@@ -1347,6 +1719,32 @@ public class Main {
             Arrays.asList(q34QCS.replaceAll("\\s", "").split(",")),
             Arrays.asList(q34Tables.replaceAll("\\s", "").split(",")),
             q34JoinCols);
+    String q34AggColumns = "cnt";
+    q34.setAggColumns(Arrays.asList(q34AggColumns.replaceAll("\\s", "").split(",")));
+    String q34GroupByColumns = "ss_ticket_number,ss_customer_sk";
+    q34.setGroupByColumns(Arrays.asList(q34GroupByColumns.replaceAll("\\s", "").split(",")));
+    String q34Query =
+        "select ss_ticket_number\n"
+            + "          ,ss_customer_sk\n"
+            + "          ,count(*) cnt\n"
+            + ",count(*) as groupsize\n"
+            + "    from FACT_TABLE as store_sales,date_dim,store,household_demographics\n"
+            + "    where store_sales.ss_sold_date_sk = date_dim.d_date_sk\n"
+            + "    and store_sales.ss_store_sk = store.s_store_sk  \n"
+            + "    and store_sales.ss_hdemo_sk = household_demographics.hd_demo_sk\n"
+            + "    and (date_dim.d_dom between 1 and 3 or date_dim.d_dom between 25 and 28)\n"
+            + "    and (household_demographics.hd_buy_potential = '1001-5000' or\n"
+            + "         household_demographics.hd_buy_potential = '5001-10000')\n"
+            + "    and household_demographics.hd_vehicle_count > 0\n"
+            + "    and (case when household_demographics.hd_vehicle_count > 0 \n"
+            + "\tthen household_demographics.hd_dep_count/ household_demographics.hd_vehicle_count \n"
+            + "\telse null \n"
+            + "\tend)  > 1.2\n"
+            + "    and date_dim.d_year in (1998,1998+1,1998+2)\n"
+            + "    and store.s_county in ('Kittitas County','Adams County','Richland County','Furnas County',\n"
+            + "                           'Orange County','Appanoose County','Franklin Parish','Tehama County')\n"
+            + "    group by ss_ticket_number,ss_customer_sk";
+    q34.setQuery(q34Query);
     queries.add(q34);
 
     List<Pair<String, String>> q39JoinCols = new ArrayList<>();

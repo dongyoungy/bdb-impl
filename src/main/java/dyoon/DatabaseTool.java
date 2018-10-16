@@ -1,7 +1,9 @@
 package dyoon;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Stopwatch;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -9,6 +11,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 
 /** Created by Dong Young Yoon on 10/9/18. */
 public class DatabaseTool {
@@ -51,6 +55,7 @@ public class DatabaseTool {
     try {
       if (this.checkTableExists(sampleTable) && !overwrite) {
         // sample already exists
+        System.out.println("Sample already exists: " + sampleTable);
         return;
       }
 
@@ -59,12 +64,148 @@ public class DatabaseTool {
         this.createUniformSample(database, s);
       } else if (s.getType() == Sample.Type.STRATIFIED) {
         this.createStratifiedSample(database, s);
+      } else if (s.getType() == Sample.Type.STRATIFIED2) {
+        this.createStratified2Sample(database, s);
       } else {
         System.out.println("Unsupported sample type: " + s.toString());
         return;
       }
       meta.addSample(s);
     } catch (final SQLException e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void testSample(Sample s, Query q, boolean measureTime, String cacheClearScript)
+      throws SQLException {
+    String sql = q.getQuery();
+    String statTable = String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
+    statTable = statTable.replaceAll("\\.", "_");
+    String originalQuery = sql.replaceAll("FACT_TABLE", q.getFactTable());
+    String sampleQuery;
+    if (q.getSampleQuery().isEmpty()) {
+      sampleQuery = sql.replaceAll("FACT_TABLE", s.toString());
+    } else {
+      sampleQuery =
+          q.getSampleQuery()
+              .replaceAll("FACT_TABLE", s.toString())
+              .replaceAll("STAT_TABLE", statTable);
+    }
+
+    String origResultTable = String.format("q%s_orig", q.getId());
+    String sampleResultTable = String.format("q%s_%s", q.getId(), s.toString());
+
+    double origTimeTaken = 0, sampleTimeTaken = 0;
+    Stopwatch watch;
+
+    if (measureTime && cacheClearScript.isEmpty()) {
+      System.out.println("You must provide a script for clearing cache to measure times.");
+      return;
+    }
+
+    if (!checkTableExists(origResultTable) || measureTime) {
+      conn.createStatement().execute(String.format("DROP TABLE IF EXISTS %s", origResultTable));
+      clearCache(cacheClearScript);
+      String createSql =
+          String.format("CREATE TABLE %s STORED AS parquet AS %s", origResultTable, originalQuery);
+      watch = Stopwatch.createStarted();
+      conn.createStatement().execute(createSql);
+      watch.stop();
+      origTimeTaken = watch.elapsed(TimeUnit.MILLISECONDS);
+    }
+    if (!checkTableExists(sampleResultTable) || measureTime) {
+      conn.createStatement().execute(String.format("DROP TABLE IF EXISTS %s", sampleResultTable));
+      boolean statFound = false;
+      ResultSet rs =
+          conn.createStatement().executeQuery(String.format("SHOW TABLE STATS %s", s.toString()));
+      if (rs.next()) {
+        long numFile = rs.getLong(1);
+        if (numFile != -1) {
+          statFound = true;
+        }
+      }
+
+      if (!statFound) {
+        conn.createStatement().execute(String.format("COMPUTE STATS %s", s.toString()));
+      }
+      clearCache(cacheClearScript);
+      String createSql =
+          String.format("CREATE TABLE %s STORED AS parquet AS %s", sampleResultTable, sampleQuery);
+      watch = Stopwatch.createStarted();
+      conn.createStatement().execute(createSql);
+      watch.stop();
+      sampleTimeTaken = watch.elapsed(TimeUnit.MILLISECONDS);
+    }
+
+    TreeSet<String> aggColumns = q.getAggColumns();
+    TreeSet<String> groupByColumns = q.getGroupByColumns();
+
+    List<String> evalItems = new ArrayList<>();
+    for (String col : aggColumns) {
+      evalItems.add(
+          String.format(
+              "abs(quotient(((s.%s / s.groupsize * o.groupsize) - "
+                  + "o.%s) * 100000, o.%s) / 100000)",
+              col, col, col));
+    }
+    String sumEval = Joiner.on(" + ").join(evalItems);
+    String selectClause =
+        String.format("(avg(%s) / %d) as avg_per_error", sumEval, evalItems.size());
+    String fromClause = String.format("%s as o, %s as s", origResultTable, sampleResultTable);
+
+    List<String> joinItems = new ArrayList<>();
+    for (String col : groupByColumns) {
+      joinItems.add(String.format("o.%s = s.%s", col, col));
+    }
+    String joinClause = Joiner.on(" AND ").join(joinItems);
+
+    String evalSql =
+        String.format("SELECT %s FROM %s WHERE %s", selectClause, fromClause, joinClause);
+
+    String origGroupCountSql =
+        String.format("SELECT count(*) as groupcount from %s", origResultTable);
+    String sampleGroupCountSql =
+        String.format("SELECT count(*) as groupcount from %s", sampleResultTable);
+
+    long origGroupCount = 0, sampleGroupCount = 0;
+    double missingGroupRatio = 0, avgPercentError = 0;
+    ResultSet rs = conn.createStatement().executeQuery(origGroupCountSql);
+    if (rs.next()) {
+      origGroupCount = rs.getLong("groupcount");
+    }
+    rs.close();
+
+    rs = conn.createStatement().executeQuery(sampleGroupCountSql);
+    if (rs.next()) {
+      sampleGroupCount = rs.getLong("groupcount");
+    }
+    rs.close();
+
+    rs = conn.createStatement().executeQuery(evalSql);
+    if (rs.next()) {
+      avgPercentError = rs.getDouble("avg_per_error");
+    }
+
+    missingGroupRatio = (double) (origGroupCount - sampleGroupCount) / (double) origGroupCount;
+    System.out.println(
+        String.format(
+            "q%s with sample %s gives: missing group ratio = %.4f %%, "
+                + "avg. percent error = %.4f %%, original time taken = %.4f s, sample time taken = %.4f s ",
+            q.getId(),
+            s.toString(),
+            missingGroupRatio * 100,
+            avgPercentError * 100,
+            origTimeTaken / 1000,
+            sampleTimeTaken / 1000));
+  }
+
+  private void clearCache(String cacheClearScript) {
+    try {
+      Process p = new ProcessBuilder("/bin/bash", cacheClearScript).start();
+      p.waitFor();
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (InterruptedException e) {
       e.printStackTrace();
     }
   }
@@ -132,6 +273,72 @@ public class DatabaseTool {
     System.err.println(String.format("Executing: %s", insertSql));
 
     this.conn.createStatement().execute(insertSql);
+    this.conn
+        .createStatement()
+        .execute(String.format("COMPUTE STATS %s.%s", database, sampleTable));
+  }
+
+  private void createStratified2Sample(final String database, final Sample s) throws SQLException {
+    final String sampleTable = s.toString();
+    final String factTable = s.getTable();
+    String sourceTable = factTable;
+
+    if (s.getJoinTables().size() > 1) {
+      Prejoin p = meta.getPrejoinForSample(database, s);
+      if (p == null) {
+        System.out.println("Prejoin required for sample does not exist: " + s.toString());
+      } else {
+        sourceTable = p.getName();
+      }
+    }
+
+    final List<String> factTableColumns = this.getColumns(factTable);
+    final SortedSet<String> sampleColumns = s.getColumns();
+    final List<String> sampleColumnsWithFactPrefix = new ArrayList<>();
+    for (final String column : sampleColumns) {
+      sampleColumnsWithFactPrefix.add(String.format("fact.%s", column));
+    }
+
+    final String sampleQCSClause = Joiner.on(",").join(sampleColumnsWithFactPrefix);
+
+    final String createSql =
+        String.format(
+            "CREATE TABLE IF NOT EXISTS %s.%s LIKE %s.%s STORED as parquet",
+            database, sampleTable, database, factTable);
+
+    this.conn.createStatement().execute(createSql);
+
+    final String insertSql =
+        String.format(
+            "INSERT OVERWRITE TABLE %s.%s SELECT %s FROM "
+                + "(SELECT fact.*, row_number() OVER (PARTITION BY %s ORDER BY %s) as rownum, "
+                + "count(*) OVER (PARTITION BY %s ORDER BY %s) as groupsize, "
+                + "%d as target_group_sample_size "
+                + "FROM %s as fact "
+                + "ORDER BY rand()) tmp "
+                + "WHERE tmp.rownum <= %d OR "
+                + "(tmp.rownum > %d AND "
+                + "rand(unix_timestamp()) < (%d / 20) / tmp.groupsize)",
+            database,
+            sampleTable,
+            Joiner.on(",").join(factTableColumns),
+            sampleQCSClause,
+            sampleQCSClause,
+            sampleQCSClause,
+            sampleQCSClause,
+            s.getMinRow(),
+            sourceTable,
+            s.getMinRow(),
+            s.getMinRow(),
+            s.getMinRow());
+    //            statTable,
+    //            joinClause);
+    System.err.println(String.format("Executing: %s", insertSql));
+
+    this.conn.createStatement().execute(insertSql);
+    this.conn
+        .createStatement()
+        .execute(String.format("COMPUTE STATS %s.%s", database, sampleTable));
   }
 
   private void createUniformSample(String database, Sample s) throws SQLException {
@@ -148,9 +355,13 @@ public class DatabaseTool {
     String insertSql =
         String.format(
             "INSERT OVERWRITE TABLE %s.%s SELECT %s FROM %s WHERE rand(unix_timestamp()) < %f",
-            database, sampleTable, Joiner.on(",").join(factTableColumns), s.getRatio());
+            database, sampleTable, Joiner.on(",").join(factTableColumns), factTable, s.getRatio());
 
     System.err.println(String.format("Executing: %s", insertSql));
+    this.conn.createStatement().execute(insertSql);
+    this.conn
+        .createStatement()
+        .execute(String.format("COMPUTE STATS %s.%s", database, sampleTable));
   }
 
   public void findOrCreateJoinTable(final Query q) {
@@ -302,7 +513,9 @@ public class DatabaseTool {
               .execute(
                   String.format(
                       "CREATE TABLE %s STORED AS parquet AS SELECT %s, groupsize,"
-                          + "(groupsize * (pow(%f,2)*0.25 / pow(%f,2)) ) / (groupsize + (pow(%f,2)*0.25 / pow(%f,2)) - 1) as target_group_sample_size "
+                          + "(groupsize * (pow(%f,2)*0.25 / pow(%f,2)) ) / "
+                          + "(groupsize + (pow(%f,2)*0.25 / pow(%f,2)) - 1) "
+                          + "as target_group_sample_size "
                           + "FROM "
                           + "(SELECT %s,"
                           + "count(*) as groupsize from %s GROUP BY %s) t",

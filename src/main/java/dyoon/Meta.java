@@ -83,15 +83,16 @@ public class Meta {
     String key = database + "_" + table + TABLE_STAT_SUFFIX;
     String sql =
         String.format(
-            "SELECT value FROM %s WHERE type = 'stat' AND key = '%s' AND value != 'DELETED' "
-                + "ORDER BY ts DESC",
+            "SELECT value FROM %s WHERE type = 'stat' AND key = '%s' " + "ORDER BY ts DESC",
             META_NAME, key);
     try {
       ResultSet rs = conn.createStatement().executeQuery(sql);
       if (rs.next()) {
         String json = rs.getString("value");
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.readValue(json, Stat.class);
+        if (!json.equals("DELETED")) {
+          ObjectMapper mapper = new ObjectMapper();
+          return mapper.readValue(json, Stat.class);
+        }
       }
     } catch (SQLException e) {
       e.printStackTrace();
@@ -186,6 +187,7 @@ public class Meta {
             "SELECT value FROM %s WHERE type = 'prejoin' AND value != 'DELETED' "
                 + "ORDER BY ts DESC",
             META_NAME);
+    Prejoin bestP = null;
     try {
       ResultSet rs = conn.createStatement().executeQuery(sql);
       while (rs.next()) {
@@ -193,7 +195,12 @@ public class Meta {
         ObjectMapper mapper = new ObjectMapper();
         Prejoin p = mapper.readValue(json, Prejoin.class);
         if (p.supports(database, s.getQuery())) {
-          return p;
+          if (bestP == null) bestP = p;
+          else {
+            if (p.getTableSet().size() < bestP.getTableSet().size()) {
+              bestP = p;
+            }
+          }
         }
       }
     } catch (SQLException e) {
@@ -206,7 +213,34 @@ public class Meta {
       e.printStackTrace();
     }
 
-    return null;
+    return bestP;
+  }
+
+  public List<Sample> getSamples() {
+    List<Sample> samples = new ArrayList<>();
+    String sql =
+        String.format(
+            "SELECT value FROM %s WHERE type = 'sample' AND value != 'DELETED' "
+                + "ORDER BY ts DESC",
+            META_NAME);
+    try {
+      ResultSet rs = conn.createStatement().executeQuery(sql);
+      while (rs.next()) {
+        String json = rs.getString("value").replaceAll("null", "{\"id\":\"unknown\"}");
+        ObjectMapper mapper = new ObjectMapper();
+        Sample s = mapper.readValue(json, Sample.class);
+        samples.add(s);
+      }
+    } catch (SQLException e) {
+      e.printStackTrace();
+    } catch (JsonParseException e) {
+      e.printStackTrace();
+    } catch (JsonMappingException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return samples;
   }
 
   public void addSample(Sample s) {
