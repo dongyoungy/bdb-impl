@@ -36,8 +36,8 @@ public class Sample implements Serializable {
 
   private double ratio; // used by uniform
 
-  private double Z;
-  private double E; // used by stratified
+  private double Z = 2.576;
+  private double E = 0.01; // used by stratified
 
   private int minRow; // used by stratified2
 
@@ -144,7 +144,8 @@ public class Sample implements Serializable {
   }
 
   public double getZ() {
-    return Z;
+    if (Z == 0) return 2.576;
+    else return Z;
   }
 
   public void setZ(double z) {
@@ -152,7 +153,8 @@ public class Sample implements Serializable {
   }
 
   public double getE() {
-    return E;
+    if (E == 0) return 0.01;
+    else return E;
   }
 
   public void setE(double e) {

@@ -693,91 +693,91 @@ public class Main {
             + "        select * from ws) tmp1\n"
             + " group by i_manufact_id\n"
             + " order by total_sales";
-    //    String q33_1SampleQuery =
-    //        "with ss as (\n"
-    //            + " select tmp.i_manufact_id, sum(tmp.total_sales) / sum(tmp.samplesize) *
-    // sum(stat.groupsize) as total_sales\n"
-    //            + " from\n"
-    //            + " (\n"
-    //            + " select\n"
-    //            + "          i_manufact_id,ca_gmt_offset,d_year,d_moy,sum(ss_ext_sales_price)
-    // total_sales, count(*) as samplesize\n"
-    //            + " from\n"
-    //            + " \tFACT_TABLE as store_sales,\n"
-    //            + " \tdate_dim,\n"
-    //            + "         customer_address,\n"
-    //            + "         item\n"
-    //            + " where\n"
-    //            + "         i_manufact_id in (select\n"
-    //            + "  i_manufact_id\n"
-    //            + "from\n"
-    //            + " item\n"
-    //            + "where i_category in ('Books'))\n"
-    //            + " and     ss_item_sk              = i_item_sk\n"
-    //            + " and     ss_sold_date_sk         = d_date_sk\n"
-    //            + " and     d_year                  = 1999\n"
-    //            + " and     d_moy                   = 3\n"
-    //            + " and     ss_addr_sk              = ca_address_sk\n"
-    //            + " and     ca_gmt_offset           = -6 \n"
-    //            + " group by i_manufact_id,ca_gmt_offset,d_year,d_moy) tmp, STAT_TABLE stat\n"
-    //            + " where tmp.i_manufact_id = stat.i_manufact_id\n"
-    //            + "and tmp.ca_gmt_offset = stat.ca_gmt_offset\n"
-    //            + "and tmp.d_moy = stat.d_moy\n"
-    //            + "and tmp.d_year = stat.d_year\n"
-    //            + "group by i_manufact_id\n"
-    //            + "),\n"
-    //            + " cs as (\n"
-    //            + " select\n"
-    //            + "          i_manufact_id,sum(cs_ext_sales_price) total_sales\n"
-    //            + " from\n"
-    //            + " \tcatalog_sales,\n"
-    //            + " \tdate_dim,\n"
-    //            + "         customer_address,\n"
-    //            + "         item\n"
-    //            + " where\n"
-    //            + "         i_manufact_id               in (select\n"
-    //            + "  i_manufact_id\n"
-    //            + "from\n"
-    //            + " item\n"
-    //            + "where i_category in ('Books'))\n"
-    //            + " and     cs_item_sk              = i_item_sk\n"
-    //            + " and     cs_sold_date_sk         = d_date_sk\n"
-    //            + " and     d_year                  = 1999\n"
-    //            + " and     d_moy                   = 3\n"
-    //            + " and     cs_bill_addr_sk         = ca_address_sk\n"
-    //            + " and     ca_gmt_offset           = -6 \n"
-    //            + " group by i_manufact_id),\n"
-    //            + " ws as (\n"
-    //            + " select\n"
-    //            + "          i_manufact_id,sum(ws_ext_sales_price) total_sales\n"
-    //            + " from\n"
-    //            + " \tweb_sales,\n"
-    //            + " \tdate_dim,\n"
-    //            + "         customer_address,\n"
-    //            + "         item\n"
-    //            + " where\n"
-    //            + "         i_manufact_id               in (select\n"
-    //            + "  i_manufact_id\n"
-    //            + "from\n"
-    //            + " item\n"
-    //            + "where i_category in ('Books'))\n"
-    //            + " and     ws_item_sk              = i_item_sk\n"
-    //            + " and     ws_sold_date_sk         = d_date_sk\n"
-    //            + " and     d_year                  = 1999\n"
-    //            + " and     d_moy                   = 3\n"
-    //            + " and     ws_bill_addr_sk         = ca_address_sk\n"
-    //            + " and     ca_gmt_offset           = -6\n"
-    //            + " group by i_manufact_id)\n"
-    //            + "  select  i_manufact_id ,sum(total_sales) total_sales, count(*) as groupsize\n"
-    //            + " from  (select * from ss \n"
-    //            + "        union all\n"
-    //            + "        select * from cs \n"
-    //            + "        union all\n"
-    //            + "        select * from ws) tmp1\n"
-    //            + " group by i_manufact_id\n"
-    //            + " order by total_sales";
+    String q33_1SampleQuery =
+        "with ss as (\n"
+            + " select tmp.i_manufact_id, sum(tmp.total_sales) / sum(tmp.samplesize) *"
+            + " sum(stat.groupsize) as total_sales\n"
+            + " from\n"
+            + " (\n"
+            + " select\n"
+            + "          i_manufact_id,ca_gmt_offset,d_year,d_moy,sum(ss_ext_sales_price)\n"
+            + "total_sales, count(*) as samplesize\n"
+            + " from\n"
+            + " \tFACT_TABLE as store_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     ss_item_sk              = i_item_sk\n"
+            + " and     ss_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     ss_addr_sk              = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6 \n"
+            + " group by i_manufact_id,ca_gmt_offset,d_year,d_moy) tmp, STAT_TABLE stat\n"
+            + " where tmp.i_manufact_id = stat.i_manufact_id\n"
+            + "and tmp.ca_gmt_offset = stat.ca_gmt_offset\n"
+            + "and tmp.d_moy = stat.d_moy\n"
+            + "and tmp.d_year = stat.d_year\n"
+            + "group by i_manufact_id\n"
+            + "),\n"
+            + " cs as (\n"
+            + " select\n"
+            + "          i_manufact_id,sum(cs_ext_sales_price) total_sales\n"
+            + " from\n"
+            + " \tcatalog_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id               in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     cs_item_sk              = i_item_sk\n"
+            + " and     cs_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     cs_bill_addr_sk         = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6 \n"
+            + " group by i_manufact_id),\n"
+            + " ws as (\n"
+            + " select\n"
+            + "          i_manufact_id,sum(ws_ext_sales_price) total_sales\n"
+            + " from\n"
+            + " \tweb_sales,\n"
+            + " \tdate_dim,\n"
+            + "         customer_address,\n"
+            + "         item\n"
+            + " where\n"
+            + "         i_manufact_id               in (select\n"
+            + "  i_manufact_id\n"
+            + "from\n"
+            + " item\n"
+            + "where i_category in ('Books'))\n"
+            + " and     ws_item_sk              = i_item_sk\n"
+            + " and     ws_sold_date_sk         = d_date_sk\n"
+            + " and     d_year                  = 1999\n"
+            + " and     d_moy                   = 3\n"
+            + " and     ws_bill_addr_sk         = ca_address_sk\n"
+            + " and     ca_gmt_offset           = -6\n"
+            + " group by i_manufact_id)\n"
+            + "  select  i_manufact_id ,sum(total_sales) total_sales, count(*) as groupsize\n"
+            + " from  (select * from ss \n"
+            + "        union all\n"
+            + "        select * from cs \n"
+            + "        union all\n"
+            + "        select * from ws) tmp1\n"
+            + " group by i_manufact_id\n"
+            + " order by total_sales";
     q33_1.setQuery(q33_1Query);
-    //    q33_1.setSampleQuery(q33_1SampleQuery);
+    q33_1.setSampleQuery(q33_1SampleQuery);
     queries.add(q33_1);
 
     List<Pair<String, String>> q33_2JoinCols = new ArrayList<>();
@@ -897,6 +897,28 @@ public class Main {
             + " \t\t,item.i_category_id\n"
             + " \t\t,item.i_category";
     q42.setQuery(q42Query);
+
+    String q42SampleQuery =
+        "select tmp.d_year, tmp.i_category_id, tmp.i_category, tmp.sum_price / tmp.samplesize * stat.groupsize as sum_price\n" +
+        "from\n" +
+        "(select  dt.d_year\n" +
+        " \t,item.i_category_id\n" +
+        " \t,item.i_category\n" +
+        " \t,sum(ss_ext_sales_price) as sum_price, count(*) as samplesize\n" +
+        " from date_dim dt\n" +
+        " \t,FACT_TABLE as store_sales\n" +
+        " \t,item\n" +
+        " where dt.d_date_sk = store_sales.ss_sold_date_sk\n" +
+        " \tand store_sales.ss_item_sk = item.i_item_sk\n" +
+        " \tand item.i_manager_id = 1  \t\n" +
+        " \tand dt.d_moy=12\n" +
+        " \tand dt.d_year=1998\n" +
+        " group by dt.d_year ,item.i_category_id, item.i_category) tmp,\n" +
+        " (select d_year, i_category_id, i_category, sum(groupsize) as groupsize from STAT_TABLE \n" +
+        " where i_manager_id =1 and d_moy=12 and d_year=1998 group by d_year, i_category, i_category_id) stat\n" +
+        " WHERE tmp.d_year = stat.d_year and tmp.i_category_id = stat.i_category_id and tmp.i_category = stat.i_category;"
+    q42.setSampleQuery(q42SampleQuery);
+
     queries.add(q42);
 
     List<Pair<String, String>> q43JoinCols = new ArrayList<>();

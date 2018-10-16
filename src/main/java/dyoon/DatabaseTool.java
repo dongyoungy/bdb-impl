@@ -79,13 +79,15 @@ public class DatabaseTool {
   public void testSample(Sample s, Query q, boolean measureTime, String cacheClearScript)
       throws SQLException {
     String sql = q.getQuery();
-    String statTable = String.format("q%s__%.4f__%.4f", s.getQuery().getId(), s.getZ(), s.getE());
+    String statTable = String.format("q%s__%.4f__%.4f", q.getId(), s.getZ(), s.getE());
     statTable = statTable.replaceAll("\\.", "_");
     String originalQuery = sql.replaceAll("FACT_TABLE", q.getFactTable());
     String sampleQuery;
+    boolean useSampleQuery = false;
     if (q.getSampleQuery().isEmpty()) {
       sampleQuery = sql.replaceAll("FACT_TABLE", s.toString());
     } else {
+      useSampleQuery = true;
       sampleQuery =
           q.getSampleQuery()
               .replaceAll("FACT_TABLE", s.toString())
@@ -142,11 +144,16 @@ public class DatabaseTool {
 
     List<String> evalItems = new ArrayList<>();
     for (String col : aggColumns) {
-      evalItems.add(
-          String.format(
-              "abs(quotient(((s.%s / s.groupsize * o.groupsize) - "
-                  + "o.%s) * 100000, o.%s) / 100000)",
-              col, col, col));
+      if (useSampleQuery) {
+        evalItems.add(
+            String.format("abs(quotient((s.%s - o.%s) * 100000, o.%s) / 100000)", col, col, col));
+      } else {
+        evalItems.add(
+            String.format(
+                "abs(quotient(((s.%s / s.groupsize * o.groupsize) - "
+                    + "o.%s) * 100000, o.%s) / 100000)",
+                col, col, col));
+      }
     }
     String sumEval = Joiner.on(" + ").join(evalItems);
     String selectClause =
