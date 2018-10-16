@@ -899,24 +899,24 @@ public class Main {
     q42.setQuery(q42Query);
 
     String q42SampleQuery =
-        "select tmp.d_year, tmp.i_category_id, tmp.i_category, tmp.sum_price / tmp.samplesize * stat.groupsize as sum_price\n" +
-        "from\n" +
-        "(select  dt.d_year\n" +
-        " \t,item.i_category_id\n" +
-        " \t,item.i_category\n" +
-        " \t,sum(ss_ext_sales_price) as sum_price, count(*) as samplesize\n" +
-        " from date_dim dt\n" +
-        " \t,FACT_TABLE as store_sales\n" +
-        " \t,item\n" +
-        " where dt.d_date_sk = store_sales.ss_sold_date_sk\n" +
-        " \tand store_sales.ss_item_sk = item.i_item_sk\n" +
-        " \tand item.i_manager_id = 1  \t\n" +
-        " \tand dt.d_moy=12\n" +
-        " \tand dt.d_year=1998\n" +
-        " group by dt.d_year ,item.i_category_id, item.i_category) tmp,\n" +
-        " (select d_year, i_category_id, i_category, sum(groupsize) as groupsize from STAT_TABLE \n" +
-        " where i_manager_id =1 and d_moy=12 and d_year=1998 group by d_year, i_category, i_category_id) stat\n" +
-        " WHERE tmp.d_year = stat.d_year and tmp.i_category_id = stat.i_category_id and tmp.i_category = stat.i_category;"
+        "select tmp.d_year, tmp.i_category_id, tmp.i_category, tmp.sum_price / tmp.samplesize * stat.groupsize as sum_price\n"
+            + "from\n"
+            + "(select  dt.d_year\n"
+            + " \t,item.i_category_id\n"
+            + " \t,item.i_category\n"
+            + " \t,sum(ss_ext_sales_price) as sum_price, count(*) as samplesize\n"
+            + " from date_dim dt\n"
+            + " \t,FACT_TABLE as store_sales\n"
+            + " \t,item\n"
+            + " where dt.d_date_sk = store_sales.ss_sold_date_sk\n"
+            + " \tand store_sales.ss_item_sk = item.i_item_sk\n"
+            + " \tand item.i_manager_id = 1  \t\n"
+            + " \tand dt.d_moy=12\n"
+            + " \tand dt.d_year=1998\n"
+            + " group by dt.d_year ,item.i_category_id, item.i_category) tmp,\n"
+            + " (select d_year, i_category_id, i_category, sum(groupsize) as groupsize from STAT_TABLE \n"
+            + " where i_manager_id =1 and d_moy=12 and d_year=1998 group by d_year, i_category, i_category_id) stat\n"
+            + " WHERE tmp.d_year = stat.d_year and tmp.i_category_id = stat.i_category_id and tmp.i_category = stat.i_category;";
     q42.setSampleQuery(q42SampleQuery);
 
     queries.add(q42);
